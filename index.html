@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Image to JPG</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Drop Zone -->
+    <div id="dropZone" class="drop-zone">
+      <div class="drop-content">
+        <div class="drop-icon">
+          <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <h2 class="drop-title">拖入文件夹</h2>
+        <p class="drop-hint">或点击下方按钮选择文件夹</p>
+
+        <button id="addFolderBtn" class="add-folder-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 22h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/>
+            <line x1="12" y1="10" x2="12" y2="18"/>
+            <line x1="8" y1="14" x2="16" y2="14"/>
+          </svg>
+          添加文件夹
+        </button>
+        
+        <p class="drop-hint small-hint">支持 HEIC、LIVP、PNG、JPG 格式文件</p>
+
+        <!-- Settings Section -->
+        <div class="settings-panel">
+          <div class="setting-item">
+            <label for="qualityRange">JPG 压缩质量: <span id="qualityValue">95</span></label>
+            <input type="range" id="qualityRange" min="1" max="100" value="95">
+          </div>
+          <div class="setting-item">
+            <label class="checkbox-label">
+              <input type="checkbox" id="compressJpg" checked>
+              <span>同时压缩原有的 JPG 文件</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Processing Panel -->
+    <div id="processingPanel" class="processing-panel hidden">
+      <!-- Header -->
+      <div class="panel-header">
+        <h2 id="currentFolder">处理中...</h2>
+        <div class="progress-container">
+          <div class="progress-bar">
+            <div id="progressFill" class="progress-fill"></div>
+          </div>
+          <span id="progressText" class="progress-text">0%</span>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div id="statsContainer" class="stats-container">
+        <div class="stat-item">
+          <span class="stat-label">HEIC</span>
+          <span id="heicCount" class="stat-value">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">LIVP</span>
+          <span id="livpCount" class="stat-value">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">PNG</span>
+          <span id="pngCount" class="stat-value">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">JPG</span>
+          <span id="jpgCount" class="stat-value">0</span>
+        </div>
+      </div>
+
+      <!-- Summary (shown after completion) -->
+      <div id="summaryContainer" class="summary-container hidden">
+        <div class="summary-header">
+          <span id="summaryIcon" class="summary-icon"></span>
+          <span id="summaryTitle" class="summary-title"></span>
+        </div>
+        <div class="summary-stats">
+          <div class="summary-stat">
+            <span class="summary-stat-value" id="summaryDuration">0秒</span>
+            <span class="summary-stat-label">耗时</span>
+          </div>
+          <div class="summary-stat">
+            <span class="summary-stat-value" id="summaryTotal">0</span>
+            <span class="summary-stat-label">总数</span>
+          </div>
+          <div class="summary-stat success">
+            <span class="summary-stat-value" id="summarySuccess">0</span>
+            <span class="summary-stat-label">成功</span>
+          </div>
+          <div class="summary-stat error">
+            <span class="summary-stat-value" id="summaryFailed">0</span>
+            <span class="summary-stat-label">失败</span>
+          </div>
+        </div>
+        <div class="summary-buttons">
+          <button id="openFolderBtn" class="new-process-btn secondary-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z"/>
+            </svg>
+            打开输出文件夹
+          </button>
+          <button id="newProcessBtn" class="new-process-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            处理新文件夹
+          </button>
+        </div>
+      </div>
+
+      <!-- Log Output -->
+      <div id="logContainer" class="log-container">
+        <div id="logOutput" class="log-output"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
