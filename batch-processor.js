@@ -3,13 +3,13 @@
 const { Command } = require('commander');
 const fs = require('fs');
 const path = require('path');
-const { 
-  safeExecute, 
-  safeExecuteAsync, 
-  createErrorResult, 
-  ErrorTypes, 
-  wrapWithTryCatch, 
-  wrapAsyncWithTryCatch 
+const {
+  safeExecute,
+  safeExecuteAsync,
+  createErrorResult,
+  ErrorTypes,
+  wrapWithTryCatch,
+  wrapAsyncWithTryCatch
 } = require('./error-handler');
 const { ProgressReporter } = require('./progress-reporter');
 const { convertHeicToJpgAuto, convertPngToJpgAuto } = require('./heic-converter');
@@ -21,7 +21,7 @@ const { copyToJpgDirectory, createJpgDirectory } = require('./file-manager');
  * @param {string} dirPath - 目录路径
  * @returns {Object} 包含成功状态的验证结果
  */
-const validateDirectory = wrapWithTryCatch(function(dirPath) {
+const validateDirectory = wrapWithTryCatch(function (dirPath) {
   // 检查目录是否存在
   if (!fs.existsSync(dirPath)) {
     return {
@@ -43,7 +43,7 @@ const validateDirectory = wrapWithTryCatch(function(dirPath) {
       };
     }
   );
-  
+
   if (!stats || !stats.isDirectory()) {
     return {
       success: false,
@@ -62,7 +62,7 @@ const validateDirectory = wrapWithTryCatch(function(dirPath) {
       errorType: ErrorTypes.PERMISSION_ERROR
     };
   }
-  
+
   return {
     success: true,
     path: dirPath
@@ -115,12 +115,12 @@ function isJpgFile(filename) {
  * @param {Object} options - 处理选项
  * @returns {Promise<Object>} 处理结果
  */
-const processHeicFile = wrapAsyncWithTryCatch(async function(filePath, progressReporter, current, total, options = {}) {
+const processHeicFile = wrapAsyncWithTryCatch(async function (filePath, progressReporter, current, total, options = {}) {
   const filename = path.basename(filePath);
-  
+
   // Log file processing start (Requirement 4.2)
   progressReporter.logFileProcessing(filename, 'heic', current, total);
-  
+
   // Convert HEIC to JPG directly to output directory (源目录不做任何变更)
   const conversionResult = await safeExecuteAsync(
     convertHeicToJpgAuto,
@@ -130,12 +130,12 @@ const processHeicFile = wrapAsyncWithTryCatch(async function(filePath, progressR
     },
     { success: false, error: 'HEIC conversion failed' }
   );
-  
+
   if (!conversionResult.success) {
     progressReporter.logError(filename, conversionResult.error, 'heic', 'conversion');
     return { success: false, filename, error: conversionResult.error, type: 'heic' };
   }
-  
+
   // Log successful conversion (Requirement 4.3)
   progressReporter.logSuccess(filename, conversionResult.outputPath, 'heic', {
     converted: true,
@@ -144,7 +144,7 @@ const processHeicFile = wrapAsyncWithTryCatch(async function(filePath, progressR
     inputSize: conversionResult.inputSize,
     outputSize: conversionResult.outputSize
   });
-  
+
   return {
     success: true,
     filename,
@@ -162,12 +162,12 @@ const processHeicFile = wrapAsyncWithTryCatch(async function(filePath, progressR
  * @param {Object} options - 处理选项
  * @returns {Promise<Object>} 处理结果
  */
-const processPngFile = wrapAsyncWithTryCatch(async function(filePath, progressReporter, current, total, options = {}) {
+const processPngFile = wrapAsyncWithTryCatch(async function (filePath, progressReporter, current, total, options = {}) {
   const filename = path.basename(filePath);
-  
+
   // 记录文件处理开始
   progressReporter.logFileProcessing(filename, 'png', current, total);
-  
+
   // 将PNG转换为JPG直接输出到目标目录 (源目录不做任何变更)
   const conversionResult = await safeExecuteAsync(
     convertPngToJpgAuto,
@@ -177,12 +177,12 @@ const processPngFile = wrapAsyncWithTryCatch(async function(filePath, progressRe
     },
     { success: false, error: 'PNG conversion failed' }
   );
-  
+
   if (!conversionResult.success) {
     progressReporter.logError(filename, conversionResult.error, 'png', 'conversion');
     return { success: false, filename, error: conversionResult.error, type: 'png' };
   }
-  
+
   // 记录成功转换
   progressReporter.logSuccess(filename, conversionResult.outputPath, 'png', {
     converted: true,
@@ -191,7 +191,7 @@ const processPngFile = wrapAsyncWithTryCatch(async function(filePath, progressRe
     inputSize: conversionResult.inputSize,
     outputSize: conversionResult.outputSize
   });
-  
+
   return {
     success: true,
     filename,
@@ -209,26 +209,26 @@ const processPngFile = wrapAsyncWithTryCatch(async function(filePath, progressRe
  * @param {Object} options - 处理选项
  * @returns {Promise<Object>} 处理结果
  */
-const processJpgFile = wrapAsyncWithTryCatch(async function(filePath, progressReporter, current, total, options = {}) {
+const processJpgFile = wrapAsyncWithTryCatch(async function (filePath, progressReporter, current, total, options = {}) {
   const filename = path.basename(filePath);
-  
+
   // 记录文件处理开始
   progressReporter.logFileProcessing(filename, 'jpg', current, total);
-  
+
   if (options.compressJpg) {
     // 如果选择压缩JPG，使用 sharp 进行转换（压缩）
     const { convertPngToJpgAuto } = require('./heic-converter'); // PNG转JPG逻辑通用
     const sharp = require('sharp');
     const targetPath = path.join(options.outputDir, filename);
-    
+
     try {
       const stats = fs.statSync(filePath);
       await sharp(filePath)
         .jpeg({ quality: options.quality || 95 })
         .toFile(targetPath);
-      
+
       const outputStats = fs.statSync(targetPath);
-      
+
       progressReporter.logSuccess(filename, targetPath, 'jpg', {
         converted: true,
         originalFormat: 'jpg',
@@ -236,7 +236,7 @@ const processJpgFile = wrapAsyncWithTryCatch(async function(filePath, progressRe
         inputSize: stats.size,
         outputSize: outputStats.size
       });
-      
+
       return {
         success: true,
         filename,
@@ -251,17 +251,17 @@ const processJpgFile = wrapAsyncWithTryCatch(async function(filePath, progressRe
     // 对于不压缩的JPG文件，复制到输出目录 (源目录不做任何变更)
     const { copyToJpgDirectory } = require('./file-manager');
     const copyResult = copyToJpgDirectory(filePath, filename, options.outputDir);
-    
+
     if (!copyResult.success) {
       progressReporter.logError(filename, copyResult.error, 'jpg', 'copy');
       return { success: false, filename, error: copyResult.error, type: 'jpg' };
     }
-    
+
     progressReporter.logSuccess(filename, copyResult.targetPath, 'jpg', {
       converted: false,
       originalFormat: 'jpg'
     });
-    
+
     return {
       success: true,
       filename,
@@ -280,33 +280,36 @@ const processJpgFile = wrapAsyncWithTryCatch(async function(filePath, progressRe
  * @param {Object} options - 处理选项
  * @returns {Promise<Object>} 处理结果
  */
-const processLivpFile = wrapAsyncWithTryCatch(async function(filePath, progressReporter, current, total, options = {}) {
+const processLivpFile = wrapAsyncWithTryCatch(async function (filePath, progressReporter, current, total, options = {}) {
   const filename = path.basename(filePath);
-  
+
   // Log file processing start (Requirement 4.2)
   progressReporter.logFileProcessing(filename, 'livp', current, total);
-  
+
   // Extract image from LIVP directly to output directory (源目录不做任何变更)
   const extractionResult = await safeExecuteAsync(
     extractImageFromLivp,
-    [filePath, options.outputDir],  // 直接输出到 jpg 目录
+    [filePath, options.outputDir, options],  // 直接输出到 jpg 目录并传递 options
     (error) => {
       progressReporter.logError(filename, error.message, 'livp', 'extraction');
     },
     { success: false, error: 'LIVP extraction failed' }
   );
-  
+
   if (!extractionResult.success) {
     progressReporter.logError(filename, extractionResult.error, 'livp', 'extraction');
     return { success: false, filename, error: extractionResult.error, type: 'livp' };
   }
-  
+
   // Log successful extraction (Requirement 4.3)
   progressReporter.logSuccess(filename, extractionResult.outputPath, 'livp', {
     converted: extractionResult.converted,
-    originalFormat: extractionResult.originalFormat
+    originalFormat: extractionResult.originalFormat,
+    compressionRatio: extractionResult.compressionRatio,
+    inputSize: extractionResult.inputSize,
+    outputSize: extractionResult.outputSize
   });
-  
+
   return {
     success: true,
     filename,
@@ -327,7 +330,7 @@ const processLivpFile = wrapAsyncWithTryCatch(async function(filePath, progressR
  * @param {Object} options - 处理选项
  * @returns {Promise<Object>} 处理结果和统计信息
  */
-const batchProcessImages = wrapAsyncWithTryCatch(async function(fileCategories, targetDirectory, progressReporter, options = {}) {
+const batchProcessImages = wrapAsyncWithTryCatch(async function (fileCategories, targetDirectory, progressReporter, options = {}) {
   // 初始化处理统计信息
   const processingStats = {
     startTime: new Date(),
@@ -343,10 +346,10 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function(fileCategories, 
     copiedToJpgDir: 0,
     errors: []
   };
-  
+
   // 记录处理开始（需求4.1）
   progressReporter.logStart(targetDirectory, fileCategories);
-  
+
   // 确保输出目录存在并进行错误处理（需求5.1）
   const outputDir = options.outputDir || null;
   const jpgDirResult = await safeExecuteAsync(
@@ -364,7 +367,7 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function(fileCategories, 
     },
     { success: false, error: 'Failed to create output directory' }
   );
-  
+
   if (!jpgDirResult.success) {
     progressReporter.logError('jpg directory', jpgDirResult.error, 'system', 'directory creation');
     processingStats.errors.push({
@@ -375,23 +378,23 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function(fileCategories, 
     });
     // Continue processing even if jpg directory creation fails
   }
-  
+
   // 确保 options.outputDir 使用实际创建的目录路径
   const finalOutputDir = jpgDirResult.path || options.outputDir || path.join(targetDirectory, 'jpg');
   const processingOptions = { ...options, outputDir: finalOutputDir };
-  
+
   // 合并所有文件以进行顺序处理
   const allFiles = [...fileCategories.heicFiles, ...fileCategories.livpFiles, ...(fileCategories.pngFiles || []), ...(fileCategories.jpgFiles || [])];
   const results = [];
-  
+
   // 顺序处理每个文件以管理内存使用（需求6.1-6.5）
   for (let i = 0; i < allFiles.length; i++) {
     const filePath = allFiles[i];
     const filename = path.basename(filePath);
-    
+
     // 更新处理统计信息
     processingStats.processedFiles++;
-    
+
     // 检查文件是否存在并进行错误处理
     const fileExists = safeExecute(
       fs.existsSync,
@@ -409,7 +412,7 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function(fileCategories, 
       },
       false
     );
-    
+
     if (!fileExists) {
       progressReporter.logError(filename, 'File does not exist', 'unknown', 'file access');
       processingStats.failedConversions++;
@@ -423,7 +426,7 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function(fileCategories, 
       results.push({ success: false, filename, error: 'File does not exist', type: 'unknown' });
       continue;
     }
-    
+
     // 检查文件可访问性并进行错误处理
     const isReadable = safeExecute(
       () => {
@@ -444,30 +447,30 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function(fileCategories, 
       },
       false
     );
-    
+
     if (!isReadable) {
       processingStats.failedConversions++;
       results.push({ success: false, filename, error: 'File is not readable', type: 'unknown' });
       continue;
     }
-    
+
     let result;
-    
+
     // 检查是否应该跳过此文件（如果已经有JPG版本）
     let shouldSkip = false;
     if (options.skipExisting) {
       const baseFilename = path.basename(filePath, path.extname(filePath));
       const jpgPath = path.join(path.dirname(filePath), `${baseFilename}.jpg`);
       const jpegPath = path.join(path.dirname(filePath), `${baseFilename}.jpeg`);
-      
+
       shouldSkip = fs.existsSync(jpgPath) || fs.existsSync(jpegPath);
-      
+
       if (shouldSkip) {
         progressReporter.logInfo(`Skipping ${filename} - JPG version already exists`);
-        result = { 
-          success: true, 
-          filename, 
-          skipped: true, 
+        result = {
+          success: true,
+          filename,
+          skipped: true,
           type: isHeicFile(filename) ? 'heic' : (isLivpFile(filename) ? 'livp' : 'png')
         };
         processingStats.successfulConversions++;
@@ -475,7 +478,7 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function(fileCategories, 
         continue;
       }
     }
-    
+
     // 根据文件类型进行处理并进行错误处理
     try {
       if (isHeicFile(filename)) {
@@ -512,7 +515,7 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function(fileCategories, 
       });
       result = { success: false, filename, error: error.message, type: 'unknown' };
     }
-    
+
     // 根据处理结果更新统计信息
     if (result.success) {
       processingStats.successfulConversions++;
@@ -522,31 +525,31 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function(fileCategories, 
     } else {
       processingStats.failedConversions++;
     }
-    
+
     results.push(result);
-    
+
     // 可选的内存清理（有助于处理大批量文件）
     if (options.aggressiveMemoryCleanup && global.gc) {
       global.gc();
     }
   }
-  
+
   // 文件已经直接输出到目标目录，不需要再移动
-  
+
   // 完成处理统计信息
   processingStats.endTime = new Date();
   processingStats.duration = (processingStats.endTime - processingStats.startTime) / 1000;
-  processingStats.successRate = processingStats.totalFiles > 0 
-    ? (processingStats.successfulConversions / processingStats.totalFiles) * 100 
+  processingStats.successRate = processingStats.totalFiles > 0
+    ? (processingStats.successfulConversions / processingStats.totalFiles) * 100
     : 0;
-  
+
   // 记录最终摘要（需求4.4）
   progressReporter.logSummary();
-  
+
   // 返回全面的结果以便更好地进行测试和集成
   // 包含所有处理过的文件路径
   const processedFiles = results.filter(r => r.success && r.outputPath).map(r => r.outputPath);
-  
+
   return {
     success: true,
     targetDirectory,
@@ -564,7 +567,7 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function(fileCategories, 
  * @param {ProgressReporter} progressReporter - 进度报告器实例
  * @returns {Promise<Object>} 处理结果
  */
-const processFiles = wrapAsyncWithTryCatch(async function(fileCategories, targetDirectory, progressReporter) {
+const processFiles = wrapAsyncWithTryCatch(async function (fileCategories, targetDirectory, progressReporter) {
   // Delegate to the new batch processing orchestration function
   return batchProcessImages(fileCategories, targetDirectory, progressReporter);
 });
@@ -574,13 +577,13 @@ const processFiles = wrapAsyncWithTryCatch(async function(fileCategories, target
  * @param {string} dirPath - 目录路径
  * @returns {Object} 包含文件数组或错误信息的扫描结果
  */
-const scanDirectory = wrapWithTryCatch(function(dirPath) {
+const scanDirectory = wrapWithTryCatch(function (dirPath) {
   // 首先验证目录
   const validationResult = validateDirectory(dirPath);
   if (!validationResult.success) {
     return validationResult;
   }
-  
+
   // 读取目录内容并进行错误处理
   const files = safeExecute(
     fs.readdirSync,
@@ -594,7 +597,7 @@ const scanDirectory = wrapWithTryCatch(function(dirPath) {
     },
     null
   );
-  
+
   if (!files) {
     return {
       success: false,
@@ -602,7 +605,7 @@ const scanDirectory = wrapWithTryCatch(function(dirPath) {
       errorType: ErrorTypes.PERMISSION_ERROR
     };
   }
-  
+
   const heicFiles = [];
   const livpFiles = [];
   const pngFiles = [];
@@ -611,7 +614,7 @@ const scanDirectory = wrapWithTryCatch(function(dirPath) {
   // 处理每个文件
   for (const file of files) {
     const fullPath = path.join(dirPath, file);
-    
+
     // 安全地检查它是否是一个文件
     const stats = safeExecute(
       fs.statSync,
@@ -622,12 +625,12 @@ const scanDirectory = wrapWithTryCatch(function(dirPath) {
       },
       null
     );
-    
+
     // 跳过我们无法访问或不是文件的文件
     if (!stats || !stats.isFile()) {
       continue;
     }
-    
+
     // 按类型对文件进行分类
     if (isHeicFile(file)) {
       heicFiles.push(fullPath);
@@ -686,17 +689,17 @@ program
       await extractImagesInCurrentDirectory();
       return;
     }
-    
+
     // If no directory is provided and not in legacy mode, show help
     if (!directory) {
       console.error('Error: Directory path is required');
       program.help();
       return;
     }
-    
+
     // Resolve to absolute path
     const targetDirectory = path.resolve(directory);
-    
+
     console.log(`Target directory: ${targetDirectory}`);
     if (options.verbose) {
       console.log('Verbose mode enabled');
@@ -722,14 +725,14 @@ program
       console.error(`Error: ${scanResult.error}`);
       process.exit(1);
     }
-    
+
     const fileCategories = scanResult;
-    
+
     console.log(`Found ${fileCategories.heicFiles.length} HEIC files`);
     console.log(`Found ${fileCategories.livpFiles.length} LIVP files`);
     console.log(`Found ${fileCategories.pngFiles ? fileCategories.pngFiles.length : 0} PNG files`);
     console.log(`Total files to process: ${fileCategories.totalFiles}`);
-    
+
     if (options.verbose) {
       if (fileCategories.heicFiles.length > 0) {
         console.log('\nHEIC files:');
@@ -752,7 +755,7 @@ program
 
     // Create progress reporter
     const progressReporter = new ProgressReporter(options.verbose);
-    
+
     // Configure processing options
     const processingOptions = {
       aggressiveMemoryCleanup: options.memoryCleanup || false,
@@ -761,15 +764,15 @@ program
       outputDir: options.outputDir || path.join(targetDirectory, 'jpg'),
       copy: options.copy !== false
     };
-    
+
     // Start processing with the new batch processing orchestration function
     const processingResult = await batchProcessImages(
-      fileCategories, 
-      targetDirectory, 
+      fileCategories,
+      targetDirectory,
       progressReporter,
       processingOptions
     );
-    
+
     // Display additional statistics if verbose mode is enabled
     if (options.verbose && processingResult.stats) {
       console.log('\n📊 Detailed Processing Statistics:');
@@ -782,13 +785,13 @@ program
       console.log('\n✅ Processing complete');
       console.log(`  • Processed ${processingResult.stats.processedFiles} files in ${processingResult.stats.duration.toFixed(2)} seconds`);
       console.log(`  • Successful: ${processingResult.stats.successfulConversions}, Failed: ${processingResult.stats.failedConversions}`);
-      
+
       if (processingResult.stats.copiedToJpgDir > 0) {
         const outputDir = options.outputDir || path.join(targetDirectory, 'jpg');
         console.log(`  • ${processingResult.stats.copiedToJpgDir} files copied to ${outputDir} directory`);
       }
     }
-    
+
     // Exit with appropriate code based on results
     if (processingResult.hasFailures) {
       console.log('\n⚠️  Some files failed to process. Use --verbose for more details.');
@@ -822,7 +825,18 @@ module.exports = {
   // Public functions
   validateDirectory,
   scanDirectory,
-  
+  // Core processing functions (used by CLI and Worker Thread)
+  batchProcessImages,
+  processFiles,
+  processHeicFile,
+  processLivpFile,
+  processPngFile,
+  processJpgFile,
+  isHeicFile,
+  isLivpFile,
+  isPngFile,
+  isJpgFile,
+
   // For testing purposes only
   __test__: {
     batchProcessImages,
@@ -832,6 +846,8 @@ module.exports = {
     processPngFile,
     isHeicFile,
     isLivpFile,
-    isPngFile
+    isPngFile,
+    processJpgFile,
+    isJpgFile
   }
 };

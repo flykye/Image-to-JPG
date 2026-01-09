@@ -3,8 +3,17 @@ const path = require('path');
 const fs = require('fs');
 
 // Import core processing modules
-const { validateDirectory, scanDirectory, __test__: { batchProcessImages } } = require('./batch-processor');
+const { Worker } = require('worker_threads');
+const { validateDirectory, scanDirectory } = require('./batch-processor');
 const { ProgressReporter } = require('./progress-reporter');
+const Store = require('electron-store').default;
+
+const store = new Store({
+    defaults: {
+        quality: 95,
+        compressJpg: true
+    }
+});
 
 let mainWindow;
 
@@ -126,6 +135,10 @@ class UIProgressReporter extends ProgressReporter {
 // Handle directory processing
 ipcMain.handle('process-directory', async (event, dirPath, userOptions = {}) => {
   try {
+    // 1. Persist user options before processing
+    store.set('quality', userOptions.quality);
+    store.set('compressJpg', userOptions.compressJpg);
+
     // Validate directory
     const validationResult = validateDirectory(dirPath);
     if (!validationResult.success) {
@@ -142,14 +155,10 @@ ipcMain.handle('process-directory', async (event, dirPath, userOptions = {}) => 
       return { success: false, error: 'No HEIC, LIVP, PNG or JPG files found in the directory.' };
     }
 
-    // Create UI progress reporter
-    const progressReporter = new UIProgressReporter(event.sender, true);
-
-    // Ensure output directory exists and is cleared once at the beginning
-    const { createJpgDirectory } = require('./file-manager');
+    // Start an independent Worker Thread for processing to avoid blocking the UI
     const outputDir = path.join(dirPath, 'jpg');
-    
-    // Manual clear at the start of batch
+
+    // Manual clear at the start of batch (still necessary on main thread)
     if (fs.existsSync(outputDir)) {
       const files = fs.readdirSync(outputDir);
       for (const file of files) {
@@ -172,19 +181,41 @@ ipcMain.handle('process-directory', async (event, dirPath, userOptions = {}) => 
       compressJpg: userOptions.compressJpg !== undefined ? userOptions.compressJpg : true
     };
 
-    // Process files
-    const result = await batchProcessImages(
-      scanResult,
-      dirPath,
-      progressReporter,
-      options
-    );
+    // Return a promise that resolves when the worker completes
+    return new Promise((resolve, reject) => {
+      const worker = new Worker(path.join(__dirname, 'conversion-worker.js'), {
+        workerData: {
+          fileCategories: scanResult,
+          targetDirectory: dirPath,
+          options: options
+        }
+      });
 
-    return {
-      success: true,
-      stats: result.stats,
-      hasFailures: result.hasFailures
-    };
+      worker.on('message', (message) => {
+        // Forward worker progress messages to the renderer process
+        event.sender.send('processing-log', message);
+        
+        if (message.type === 'done') {
+          resolve({
+            success: true,
+            stats: message.stats,
+            hasFailures: message.hasFailures
+          });
+          worker.terminate(); // Terminate worker after successful completion
+        } else if (message.type === 'fatal-error') {
+          reject(new Error('Worker Thread Error: ' + message.error));
+          worker.terminate();
+        }
+      });
+
+      worker.on('error', reject);
+      worker.on('exit', (code) => {
+        if (code !== 0) {
+          // Safety net for crashes
+          reject(new Error('Worker stopped with exit code ' + code));
+        }
+      });
+    });
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -214,4 +245,17 @@ ipcMain.handle('open-file-dialog', async (event) => {
     buttonLabel: '选择文件夹'
   });
   return result;
+});
+
+// Handle settings persistence
+ipcMain.handle('get-settings', () => {
+  return {
+    quality: store.get('quality'),
+    compressJpg: store.get('compressJpg')
+  };
+});
+
+ipcMain.handle('set-setting', (event, key, value) => {
+  store.set(key, value);
+  return { success: true };
 });

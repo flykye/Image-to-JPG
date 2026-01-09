@@ -1,4 +1,5 @@
 const AdmZip = require("adm-zip");
+const sharp = require('sharp');
 const path = require("path");
 const fs = require("fs");
 const { convertHeicToJpg } = require("./heic-converter");
@@ -17,7 +18,7 @@ const {
  * @param {string} outputDir - 保存提取图像的目录
  * @returns {Promise<Object>} 包含成功状态和详细信息的提取结果
  */
-async function extractImageFromLivp(livpFilePath, outputDir) {
+async function extractImageFromLivp(livpFilePath, outputDir, options = {}) {
     try {
         // 验证输入文件是否存在且可访问（需求6.1, 6.3）
         if (!fs.existsSync(livpFilePath)) {
@@ -137,7 +138,7 @@ async function extractImageFromLivp(livpFilePath, outputDir) {
                 
                 conversionResult = await safeExecuteAsync(
                     convertHeicToJpg, 
-                    [tempHeicPath, outputFilePath],
+                    [tempHeicPath, outputFilePath, options],
                     (error) => console.error(`HEIC conversion error: ${error.message}`),
                     { success: false, error: 'HEIC conversion failed' }
                 );
@@ -158,8 +159,7 @@ async function extractImageFromLivp(livpFilePath, outputDir) {
             if (conversionResult.success) {
                 return { 
                     success: true, 
-                    outputPath: conversionResult.outputPath, 
-                    outputFileName: path.basename(conversionResult.outputPath),
+                    ...conversionResult, // 包含 outputPath, inputSize, outputSize, compressionRatio, method
                     converted: true,
                     originalFormat: "heic"
                 };
@@ -168,41 +168,58 @@ async function extractImageFromLivp(livpFilePath, outputDir) {
                     conversionResult.error || 'HEIC conversion failed', 'livp');
             }
         } else {
-            // 处理JPEG/JPG文件并进行增强的错误处理
+            // 处理JPEG/JPG文件。如果开启了 compressJpg 选项，则进行重新压缩。
+            const { quality = 95, compressJpg = false } = options;
+            const outputFileName = `${baseName}.jpg`;
+            const outputFilePath = path.join(outputDir, outputFileName);
+            let inputSize = imageData.length; // 原始 Buffer 大小
+
             try {
-                const outputFileName = `${baseName}${originalExtension}`;
-                const outputFilePath = path.join(outputDir, outputFileName);
-                
-                // 写入提取的图像并进行错误处理
-                try {
+                if (compressJpg) {
+                    // 使用 Sharp 进行重新压缩 (如果启用了 JPG 压缩)
+                    const outputBuffer = await sharp(imageData)
+                        .jpeg({ quality })
+                        .toBuffer();
+                    
+                    fs.writeFileSync(outputFilePath, outputBuffer);
+                    
+                    const outputStats = fs.statSync(outputFilePath);
+                    return { 
+                        success: true, 
+                        outputPath: outputFilePath, 
+                        outputFileName: outputFileName,
+                        converted: true, // 视为转换，因为它经过了压缩流程
+                        originalFormat: originalExtension.substring(1),
+                        inputSize: inputSize,
+                        outputSize: outputStats.size,
+                        compressionRatio: (1 - outputStats.size / inputSize) * 100
+                    };
+                } else {
+                    // 不进行压缩，直接写入文件
                     fs.writeFileSync(outputFilePath, imageData);
-                } catch (writeError) {
-                    return createErrorResult('extraction', path.basename(livpFilePath), 
-                        `Failed to save extracted image: ${writeError.message}`, 'livp');
+
+                    const outputStats = fs.statSync(outputFilePath);
+                    
+                    // 验证输出文件已创建且不为空
+                    if (!fs.existsSync(outputFilePath) || outputStats.size === 0) {
+                        return createErrorResult('extraction', path.basename(livpFilePath), 
+                            'Extraction completed but output file was not created or is empty', 'livp');
+                    }
+
+                    return { 
+                        success: true, 
+                        outputPath: outputFilePath, 
+                        outputFileName: outputFileName,
+                        converted: false,
+                        originalFormat: originalExtension.substring(1),
+                        inputSize: inputSize,
+                        outputSize: outputStats.size,
+                        compressionRatio: 0 // 未压缩
+                    };
                 }
-                
-                // 验证输出文件已创建且不为空
-                if (!fs.existsSync(outputFilePath)) {
-                    return createErrorResult('extraction', path.basename(livpFilePath), 
-                        'Extraction completed but output file was not created', 'livp');
-                }
-                
-                const outputStats = fs.statSync(outputFilePath);
-                if (outputStats.size === 0) {
-                    return createErrorResult('extraction', path.basename(livpFilePath), 
-                        'Extraction completed but output file is empty', 'livp');
-                }
-                
-                return { 
-                    success: true, 
-                    outputPath: outputFilePath, 
-                    outputFileName: outputFileName,
-                    converted: false,
-                    originalFormat: originalExtension.substring(1) // Remove the dot
-                };
             } catch (error) {
                 return createErrorResult('extraction', path.basename(livpFilePath), 
-                    `Failed to save extracted image: ${error.message}`, 'livp');
+                    `Failed to save or compress extracted image: ${error.message}`, 'livp');
             }
         }
     } catch (error) {

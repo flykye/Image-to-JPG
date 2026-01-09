@@ -78,6 +78,24 @@ class ProcessingStats {
 }
 
 /**
+ * Helper function to format bytes into readable string (e.g., 1.2 MB)
+ * @param {number} bytes - Size in bytes
+ * @param {number} decimals - Number of decimal places
+ * @returns {string} Formatted size string
+ */
+function formatBytes(bytes, decimals = 1) {
+    if (bytes === 0) return '0 Bytes';
+
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+/**
  * Progress Reporter class for handling all logging and progress reporting
  */
 class ProgressReporter {
@@ -169,7 +187,9 @@ class ProgressReporter {
     }
     
     if (details.compressionRatio && details.compressionRatio > 0) {
-      message += ` (${details.compressionRatio.toFixed(1)}% compression)`;
+      const inputSize = formatBytes(details.inputSize || 0);
+      const outputSize = formatBytes(details.outputSize || 0);
+      message += ` (${inputSize} → ${outputSize}, ${details.compressionRatio.toFixed(1)}% compression)`;
     }
     
     console.log(`    ${message}`);

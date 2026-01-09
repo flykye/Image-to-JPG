@@ -27,9 +27,30 @@ let isProcessing = false;
 let unsubscribeLog = null;
 let currentProcessedDir = ''; // To store the path of the output directory
 
+/**
+ * Helper function to format bytes into readable string (e.g., 1.2 MB)
+ */
+function formatBytes(bytes, decimals = 1) {
+    if (bytes === 0) return '0 Bytes';
+
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
 // Update quality value display
 qualityRange.addEventListener('input', (e) => {
   qualityValue.textContent = e.target.value;
+  window.electronAPI.setSetting('quality', parseInt(e.target.value));
+});
+
+// Handle compress JPG toggle (NEW)
+compressJpg.addEventListener('change', (e) => {
+  window.electronAPI.setSetting('compressJpg', e.target.checked);
 });
 
 // Handle 'Open Folder' button click
@@ -183,7 +204,9 @@ function handleLogMessage(data) {
     case 'success':
       let msg = `  完成: ${data.filename} → ${data.outputFilename}`;
       if (data.details && data.details.compressionRatio) {
-        msg += ` (压缩率 ${data.details.compressionRatio.toFixed(1)}%)`;
+        const inputSize = formatBytes(data.details.inputSize || 0);
+        const outputSize = formatBytes(data.details.outputSize || 0);
+        msg += ` (${inputSize} → ${outputSize}, 压缩率 ${data.details.compressionRatio.toFixed(1)}%)`;
       }
       addLogEntry('success', msg);
       break;
@@ -200,10 +223,11 @@ function handleLogMessage(data) {
       addLogEntry('info', `  ${data.message}`);
       break;
       
-    case 'summary':
+    case 'done':
       progressFill.style.width = '100%';
       progressText.textContent = '100%';
-      showSummary(data.failedConversions === 0, data);
+      // Note: Worker sends stats object inside data.stats
+      showSummary(data.stats.failedConversions === 0, data.stats);
       
       // Unsubscribe from log messages
       if (unsubscribeLog) {
@@ -270,3 +294,18 @@ processingPanel.addEventListener('dragover', (e) => {
     highlight(e);
   }
 }, false);
+
+// Load persisted settings on startup (NEW)
+async function loadSettings() {
+  const settings = await window.electronAPI.getSettings();
+  if (settings) {
+    // Apply quality setting
+    qualityRange.value = settings.quality;
+    qualityValue.textContent = settings.quality;
+
+    // Apply compressJpg setting
+    compressJpg.checked = settings.compressJpg;
+  }
+}
+
+loadSettings();

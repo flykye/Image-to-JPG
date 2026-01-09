@@ -194,8 +194,23 @@ async function convertHeicToJpg(inputPath, outputPath, options = {}) {
       errorType: 'invalid_format'
     };
   }
-
-  // Try Sharp first if HEIC is supported
+  
+  let lastErrorResult = null;
+  
+  // 1. 优先尝试 ImageMagick (用户请求)
+  const isImAvailable = await isImageMagickAvailable();
+  if (isImAvailable) {
+    console.warn('ImageMagick 可用，优先尝试使用 ImageMagick 转换 HEIC...');
+    const imResult = await convertHeicToJpgWithImageMagick(inputPath, outputPath, options);
+    if (imResult.success) {
+      return imResult;
+    }
+    // Record error and fall through to the next method
+    console.warn(`ImageMagick 转换失败: ${imResult.error}. 回退到其他转换器...`);
+    lastErrorResult = imResult;
+  }
+  
+  // 2. 尝试 Sharp
   if (isHeicSupported()) {
     try {
       // Check if input file is readable
@@ -240,32 +255,9 @@ async function convertHeicToJpg(inputPath, outputPath, options = {}) {
       };
 
     } catch (sharpError) {
-      // If Sharp fails, check if it's a codec support issue
-      const isCodecError = sharpError.message.includes('Support for this compression format has not been built in') ||
-          sharpError.message.includes('bad seek') ||
-          sharpError.message.includes('heif: Error while loading plugin') ||
-          sharpError.message.includes('heif:');
-      
-      if (isCodecError) {
-        console.warn('Sharp HEIC 转换失败（缺少解码器），尝试使用内置解码器...');
-        
-        // 尝试使用内置解码器（第一备选）
-        const builtinResult = await convertHeicToJpgBuiltIn(inputPath, outputPath, options);
-        if (builtinResult.success) {
-          return builtinResult;
-        }
-
-        // 尝试 ImageMagick（第二备选）
-        if (await isImageMagickAvailable()) {
-          console.warn('内置解码器也失败了，尝试使用 ImageMagick...');
-          return await convertHeicToJpgWithImageMagick(inputPath, outputPath, options);
-        }
-        
-        return builtinResult; // 返回内置解码器的错误
-      }
-      
-      // For other Sharp errors, return the error
-      return {
+      // If Sharp fails for any reason, we continue to the next fallback.
+      console.warn(`Sharp conversion failed: ${sharpError.message}. 尝试使用内置解码器...`);
+      lastErrorResult = {
         success: false,
         inputPath,
         outputPath,
@@ -274,22 +266,19 @@ async function convertHeicToJpg(inputPath, outputPath, options = {}) {
         method: 'sharp'
       };
     }
+  } else {
+    console.warn('Sharp 不支持 HEIC，尝试使用内置解码器...');
   }
   
-  // If Sharp is not supported or failed, try Built-in decoder first
-  console.warn('Sharp 不支持 HEIC，使用内置解码器...');
+  // 3. 尝试内置解码器 (heic-convert)
   const builtinResult = await convertHeicToJpgBuiltIn(inputPath, outputPath, options);
   if (builtinResult.success) {
     return builtinResult;
   }
-
-  // If Built-in fails, try ImageMagick
-  if (await isImageMagickAvailable()) {
-    console.warn('内置解码器失败，尝试 ImageMagick...');
-    return await convertHeicToJpgWithImageMagick(inputPath, outputPath, options);
-  }
+  lastErrorResult = builtinResult;
   
-  return builtinResult;
+  // 4. 所有尝试都失败，返回最后一次失败的结果
+  return lastErrorResult;
 }
 
 /**
