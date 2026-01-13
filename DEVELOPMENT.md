@@ -62,9 +62,7 @@ npm run build:mac
 - `assets/`: 存放应用图标等静态资源。
 
 ## 状态快照 (2026-01-09)
-- [x] **修复：** LIVP 文件处理结果现在会在 UI 上正确显示压缩率信息。
-  - 问题：`batch-processor.js` 中 `processLivpFile()` 调用 `logSuccess()` 时未传递压缩率相关参数。
-  - 修复：添加 `compressionRatio`、`inputSize`、`outputSize` 参数，确保 LIVP 文件（无论内部是 HEIC 还是 JPEG）处理后都能在日志中显示压缩信息，例如：`(3.2 MB → 1.8 MB, 压缩率 43.8%)`。
+
 
 ## 状态快照 (2026-01-07)
 - [x] 中文 UI 界面完成。
