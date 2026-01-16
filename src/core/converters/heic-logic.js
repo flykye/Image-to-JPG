@@ -4,10 +4,10 @@ const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const heicConvert = require('heic-convert');
-const { 
-  safeExecute, 
-  safeExecuteAsync, 
-  createErrorResult, 
+const {
+  safeExecute,
+  safeExecuteAsync,
+  createErrorResult,
   ErrorTypes,
   wrapWithTryCatch,
   wrapAsyncWithTryCatch
@@ -64,7 +64,20 @@ async function convertHeicToJpgBuiltIn(inputPath, outputPath, options = {}) {
       quality: quality / 100
     });
 
-    fs.writeFileSync(outputPath, outputBuffer);
+    // 尝试从原始HEIC文件读取元数据并应用到输出JPG
+    try {
+      const metadata = await sharp(inputBuffer).metadata();
+      // 使用 sharp 处理输出 buffer，仅用于设置 DPI 信息，不再进行压缩
+      const density = metadata.density || 72; // 如果无法读取则使用默认值
+      await sharp(outputBuffer)
+        .withMetadata({ density })  // 保留 DPI 信息
+        .jpeg({ quality: 100 })     // 使用最高质量，避免二次压缩损失
+        .toFile(outputPath);
+    } catch (metadataError) {
+      // 如果元数据处理失败，直接写入原始 buffer
+      console.warn(`无法保留元数据: ${metadataError.message}，使用原始输出`);
+      fs.writeFileSync(outputPath, outputBuffer);
+    }
 
     const inputStats = fs.statSync(inputPath);
     const outputStats = fs.statSync(outputPath);
@@ -99,7 +112,7 @@ async function convertHeicToJpgBuiltIn(inputPath, outputPath, options = {}) {
  */
 async function convertHeicToJpgWithImageMagick(inputPath, outputPath, options = {}) {
   const { quality = 90 } = options;
-  
+
   try {
     // Validate input file exists
     if (!fs.existsSync(inputPath)) {
@@ -172,7 +185,7 @@ async function convertHeicToJpgWithImageMagick(inputPath, outputPath, options = 
  */
 async function convertHeicToJpg(inputPath, outputPath, options = {}) {
   const { quality = 90 } = options;
-  
+
   // Basic validation
   if (!fs.existsSync(inputPath)) {
     return {
@@ -194,9 +207,9 @@ async function convertHeicToJpg(inputPath, outputPath, options = {}) {
       errorType: 'invalid_format'
     };
   }
-  
+
   let lastErrorResult = null;
-  
+
   // 1. 优先尝试 ImageMagick (用户请求)
   const isImAvailable = await isImageMagickAvailable();
   if (isImAvailable) {
@@ -209,13 +222,13 @@ async function convertHeicToJpg(inputPath, outputPath, options = {}) {
     console.warn(`ImageMagick 转换失败: ${imResult.error}. 回退到其他转换器...`);
     lastErrorResult = imResult;
   }
-  
+
   // 2. 尝试 Sharp
   if (isHeicSupported()) {
     try {
       // Check if input file is readable
       fs.accessSync(inputPath, fs.constants.R_OK);
-      
+
       // Get file stats
       const fileStats = fs.statSync(inputPath);
       if (fileStats.size === 0) {
@@ -231,6 +244,7 @@ async function convertHeicToJpg(inputPath, outputPath, options = {}) {
 
       // Perform the conversion using Sharp
       await sharp(inputPath)
+        .withMetadata()  // 保留原始图片的DPI和EXIF元数据
         .jpeg({ quality })
         .toFile(outputPath);
 
@@ -269,14 +283,14 @@ async function convertHeicToJpg(inputPath, outputPath, options = {}) {
   } else {
     console.warn('Sharp 不支持 HEIC，尝试使用内置解码器...');
   }
-  
+
   // 3. 尝试内置解码器 (heic-convert)
   const builtinResult = await convertHeicToJpgBuiltIn(inputPath, outputPath, options);
   if (builtinResult.success) {
     return builtinResult;
   }
   lastErrorResult = builtinResult;
-  
+
   // 4. 所有尝试都失败，返回最后一次失败的结果
   return lastErrorResult;
 }
@@ -327,7 +341,7 @@ async function batchConvertHeicToJpg(inputPaths, outputDir = null, options = {},
 
   for (let i = 0; i < inputPaths.length; i++) {
     const inputPath = inputPaths[i];
-    
+
     if (progressCallback) {
       progressCallback({
         current: i + 1,
@@ -352,7 +366,7 @@ async function batchConvertHeicToJpg(inputPaths, outputDir = null, options = {},
     results,
     stats: {
       ...stats,
-      compressionRatio: stats.totalInputSize > 0 ? 
+      compressionRatio: stats.totalInputSize > 0 ?
         (1 - stats.totalOutputSize / stats.totalInputSize) * 100 : 0
     }
   };
@@ -368,7 +382,7 @@ async function batchConvertHeicToJpg(inputPaths, outputDir = null, options = {},
  */
 async function convertPngToJpg(inputPath, outputPath, options = {}) {
   const { quality = 90 } = options;
-  
+
   // 基本验证
   if (!fs.existsSync(inputPath)) {
     return {
@@ -394,7 +408,7 @@ async function convertPngToJpg(inputPath, outputPath, options = {}) {
   try {
     // 检查输入文件是否可读
     fs.accessSync(inputPath, fs.constants.R_OK);
-    
+
     // 获取文件统计信息
     const fileStats = fs.statSync(inputPath);
     if (fileStats.size === 0) {
@@ -410,6 +424,7 @@ async function convertPngToJpg(inputPath, outputPath, options = {}) {
 
     // 使用Sharp进行转换
     await sharp(inputPath)
+      .withMetadata()  // 保留原始图片的DPI和EXIF元数据
       .jpeg({ quality })
       .toFile(outputPath);
 
@@ -478,7 +493,7 @@ async function convertPngToJpgAuto(inputPath, outputDir = null, options = {}) {
  */
 function getErrorType(error) {
   const message = error.message.toLowerCase();
-  
+
   if (message.includes('does not exist') || message.includes('no such file')) {
     return 'file_not_found';
   } else if (message.includes('empty')) {

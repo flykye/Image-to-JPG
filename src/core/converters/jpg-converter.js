@@ -18,6 +18,7 @@ class JpgConverter extends ImageConverter {
     if (options.compressJpg) {
       const stats = fs.statSync(filePath);
       await sharp(filePath)
+        .withMetadata()  // 保留原始图片的DPI和EXIF元数据
         .jpeg({ quality: options.quality || 95 })
         .toFile(targetPath);
 
