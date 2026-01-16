@@ -11,7 +11,7 @@ const {
   ErrorTypes,
   wrapWithTryCatch,
   wrapAsyncWithTryCatch
-} = require('./error-handler');
+} = require('../services/error-handler');
 
 const execAsync = promisify(exec);
 

@@ -110,17 +110,26 @@ class ProgressReporter {
    * @param {Object} fileCategories - Object containing file counts and arrays
    */
   logStart(directory, fileCategories) {
-    this.stats.initialize(fileCategories);
-    
+    // Normalize stats structure
+    const stats = {
+      heicFiles: fileCategories.heicFiles || (fileCategories.heic ? Array(fileCategories.heic).fill(null) : []),
+      livpFiles: fileCategories.livpFiles || (fileCategories.livp ? Array(fileCategories.livp).fill(null) : []),
+      pngFiles: fileCategories.pngFiles || (fileCategories.png ? Array(fileCategories.png).fill(null) : []),
+      jpgFiles: fileCategories.jpgFiles || (fileCategories.jpg ? Array(fileCategories.jpg).fill(null) : []),
+      totalFiles: fileCategories.totalFiles || fileCategories.total || 0
+    };
+
+    this.stats.initialize(stats);
+
     console.log('='.repeat(60));
     console.log('🚀 Starting Batch Image Processing');
     console.log('='.repeat(60));
     console.log(`📁 Target directory: ${directory}`);
-    console.log(`📊 Found ${fileCategories.heicFiles.length} HEIC files`);
-    console.log(`📊 Found ${fileCategories.livpFiles.length} LIVP files`);
-    console.log(`📊 Found ${fileCategories.pngFiles ? fileCategories.pngFiles.length : 0} PNG files`);
-    console.log(`📊 Found ${fileCategories.jpgFiles ? fileCategories.jpgFiles.length : 0} JPG files`);
-    console.log(`📊 Total files to process: ${fileCategories.totalFiles}`);
+    console.log(`📊 Found ${stats.heicFiles.length} HEIC files`);
+    console.log(`📊 Found ${stats.livpFiles.length} LIVP files`);
+    console.log(`📊 Found ${stats.pngFiles.length} PNG files`);
+    console.log(`📊 Found ${stats.jpgFiles.length} JPG files`);
+    console.log(`📊 Total files to process: ${stats.totalFiles}`);
     
     if (this.verbose && fileCategories.totalFiles > 0) {
       console.log('\n📋 Files to process:');

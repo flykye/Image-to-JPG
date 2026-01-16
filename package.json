@@ -2,13 +2,13 @@
   "name": "image-to-jpg",
   "version": "1.0.0",
   "description": "Batch image processor for HEIC, LIVP, PNG files with Electron GUI",
-  "main": "main.js",
+  "main": "src/ui/main/index.js",
   "bin": {
-    "batch-image-processor": "./batch-processor.js"
+    "batch-image-processor": "./src/cli/index.js"
   },
   "scripts": {
     "start": "electron .",
-    "cli": "node batch-processor.js",
+    "cli": "node src/cli/index.js",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
@@ -24,26 +24,16 @@
       "output": "dist"
     },
     "files": [
-      "main.js",
-      "preload.js",
-      "index.html",
-      "styles.css",
-      "renderer.js",
-      "batch-processor.js",
-      "heic-converter.js",
-      "livp.js",
-      "file-manager.js",
-      "progress-reporter.js",
-      "error-handler.js",
-      "assets/**/*",
-      "node_modules/**/*"
+      "src/**/*",
+      "node_modules/**/*",
+      "package.json"
     ],
     "asarUnpack": [
       "node_modules/sharp/**/*",
       "node_modules/@img/**/*"
     ],
     "win": {
-      "icon": "assets/icon.ico",
+      "icon": "src/assets/icon.ico",
       "target": [
         {
           "target": "portable",
@@ -54,7 +44,7 @@
       ]
     },
     "mac": {
-      "icon": "assets/icon.icns",
+      "icon": "src/assets/icon.icns",
       "category": "public.app-category.utilities",
       "target": [
         "dmg",

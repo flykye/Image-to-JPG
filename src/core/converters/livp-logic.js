@@ -2,15 +2,15 @@ const AdmZip = require("adm-zip");
 const sharp = require('sharp');
 const path = require("path");
 const fs = require("fs");
-const { convertHeicToJpg } = require("./heic-converter");
-const { 
-    safeExecute, 
-    safeExecuteAsync, 
-    createErrorResult, 
+const { convertHeicToJpg } = require("./heic-logic");
+const {
+    safeExecute,
+    safeExecuteAsync,
+    createErrorResult,
     ErrorTypes,
     wrapWithTryCatch,
     wrapAsyncWithTryCatch
-} = require("./error-handler");
+} = require("../services/error-handler");
 
 /**
  * 从LIVP文件中提取图像，并在需要时将HEIC转换为JPG
