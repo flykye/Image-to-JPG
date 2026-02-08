@@ -1,6 +1,6 @@
 # Image to JPG
 
-一个强大的跨平台 **Electron GUI 应用**，专门用于将 HEIC、LIVP、PNG 等格式图片批量、高质量地转换为 JPG 格式。同时保留了强大的 **命令行 (CLI)** 模式。
+一个强大的跨平台 **Electron GUI 应用**，专门用于将 HEIC、LIVP、PNG、DNG 等格式图片批量、高质量地转换为 JPG 格式。同时保留了强大的 **命令行 (CLI)** 模式。
 
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen)](https://nodejs.org)
 [![Electron App](https://img.shields.io/badge/Platform-Electron-blue)](https://www.electronjs.org/)
@@ -38,9 +38,10 @@ npm run build:win
 - **实时反馈**: 详细的实时处理日志、进度条和结果统计。
 
 ### 核心处理能力
-- **批量转换**: 自动扫描并处理 HEIC、LIVP、PNG 和 JPG (可选压缩) 文件。
-- **格式转换**: 将 HEIC 和 PNG 文件转换为 JPG 格式，保持高质量。
+- **批量转换**: 自动扫描并处理 HEIC、LIVP、PNG、DNG 和 JPG (可选压缩) 文件。
+- **格式转换**: 将 HEIC、PNG 和 DNG (RAW) 文件转换为 JPG 格式，保持高质量。
 - **LIVP 提取**: 从 Apple 的 LIVP 图像包中提取图像，并转换为 JPG。
+- **DNG 支持**: 支持 Adobe Digital Negative RAW 格式，使用内置预览设置处理白平衡。
 - **无污染输出**: 所有结果集中存放在源目录下的 `/jpg` 子目录，源文件保持不变。
 - **智能重命名**: 自动处理文件命名冲突。
 
@@ -192,13 +193,14 @@ batch-image-processor <目录路径>
 ## 处理流程
 
 1. 程序接受目标目录路径作为命令行参数（或 GUI 拖拽/选择）
-2. 扫描目录中的所有HEIC、LIVP、PNG和JPG文件
+2. 扫描目录中的所有HEIC、LIVP、PNG、DNG和JPG文件
 3. 处理HEIC文件：将其转换为JPG格式
 4. 处理PNG文件：将其转换为JPG格式
-5. 处理LIVP文件：提取内部图像，如果是HEIC格式则转换为JPG
-6. 处理JPG文件：根据 `--compress-jpg` 选项决定是否进行二次压缩
-7. 将处理后的JPG文件复制到输出目录（默认为输入目录下的jpg子目录）
-8. 显示处理进度和结果摘要
+5. 处理DNG文件：将RAW格式转换为JPG格式（使用内置预览设置）
+6. 处理LIVP文件：提取内部图像，如果是HEIC格式则转换为JPG
+7. 处理JPG文件：根据 `--compress-jpg` 选项决定是否进行二次压缩
+8. 将处理后的JPG文件复制到输出目录（默认为输入目录下的jpg子目录）
+9. 显示处理进度和结果摘要
 
 ## 错误处理
 

@@ -27,4 +27,18 @@ class PngConverter extends ImageConverter {
   }
 }
 
-module.exports = { HeicConverter, PngConverter };
+class DngConverter extends ImageConverter {
+  supports(filePath) {
+    return filePath.toLowerCase().endsWith('.dng');
+  }
+
+  get type() { return 'dng'; }
+
+  async convert(filePath, outputDir, options) {
+    const { convertDngToJpgAuto } = require('./dng-logic');
+    return await convertDngToJpgAuto(filePath, outputDir, options);
+  }
+}
+
+module.exports = { HeicConverter, PngConverter, DngConverter };
+

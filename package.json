@@ -1,7 +1,7 @@
 {
   "name": "image-to-jpg",
-  "version": "1.0.0",
-  "description": "Batch image processor for HEIC, LIVP, PNG files with Electron GUI",
+  "version": "1.1.0",
+  "description": "Batch image processor for HEIC, LIVP, PNG, DNG files with Electron GUI",
   "main": "src/ui/main/index.js",
   "bin": {
     "batch-image-processor": "./src/cli/index.js"
@@ -69,7 +69,6 @@
     "heic-convert": "^2.1.0",
     "sharp": "^0.34.5"
   },
-
   "devDependencies": {
     "electron": "^39.2.7",
     "electron-builder": "26.0.12",

@@ -26,19 +26,20 @@ class ConverterFactory {
   }
 
   getSupportedExtensions() {
-    return ['.heic', '.livp', '.png', '.jpg', '.jpeg'];
+    return ['.heic', '.livp', '.png', '.dng', '.jpg', '.jpeg'];
   }
 }
 
 const factory = new ConverterFactory();
 
 // 注册转换器
-const { HeicConverter, PngConverter } = require('./image-converters');
+const { HeicConverter, PngConverter, DngConverter } = require('./image-converters');
 const { LivpConverter } = require('./livp-converter');
 const { JpgConverter } = require('./jpg-converter');
 
 factory.register(new HeicConverter());
 factory.register(new PngConverter());
+factory.register(new DngConverter());
 factory.register(new LivpConverter());
 factory.register(new JpgConverter());
 

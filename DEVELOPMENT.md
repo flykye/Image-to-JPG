@@ -1,7 +1,7 @@
 # Image to JPG 开发文档
 
 ## 项目概述
-一个基于 Electron 开发的跨平台图形化图片处理工具，专门用于将 HEIC、LIVP、PNG 格式图片批量转换为 JPG 格式。项目名称已变更为 **Image to JPG**。
+一个基于 Electron 开发的跨平台图形化图片处理工具，专门用于将 HEIC、LIVP、PNG、DNG 格式图片批量转换为 JPG 格式。项目名称已变更为 **Image to JPG**。
 
 ## 核心功能
 - **拖拽/选择处理**: 支持将整个文件夹拖入界面，或通过 “添加文件夹” 按钮选择目录，自动开始处理。
@@ -14,7 +14,7 @@
 ## 技术架构
 - **框架**: Electron (渲染进程与主进程通过 IPC 通信)。
 - **图像处理**: 
-  - `sharp`: 用于高性能转换。
+  - `sharp`: 用于高性能转换，支持 HEIC、PNG、DNG 等格式。
   - `heic-convert`: 内置 Wasm 解码器，确保 Windows 在无插件情况下也能处理 HEIC。
   - `adm-zip`: 用于解析 LIVP (本质是 ZIP) 文件。
 - **打包工具**: `electron-builder`。

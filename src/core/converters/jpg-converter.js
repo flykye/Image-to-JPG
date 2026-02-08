@@ -40,8 +40,20 @@ class JpgConverter extends ImageConverter {
     } else {
       const { copyToJpgDirectory } = require('../services/file-manager');
       const copyResult = copyToJpgDirectory(filePath, filename, outputDir);
+
+      // 如果复制失败，返回失败结果
+      if (!copyResult.success) {
+        return {
+          success: false,
+          error: copyResult.error,
+          type: 'jpg'
+        };
+      }
+
       return {
-        ...copyResult,
+        success: true,
+        filename,
+        outputPath: copyResult.targetPath,  // 映射targetPath到outputPath
         type: 'jpg',
         details: {
           converted: false,

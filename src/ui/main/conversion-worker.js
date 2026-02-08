@@ -17,6 +17,7 @@ class WorkerProgressReporter extends ProgressReporter {
       heicCount: fileCategories.heic || fileCategories.heicCount || 0,
       livpCount: fileCategories.livp || fileCategories.livpCount || 0,
       pngCount: fileCategories.png || fileCategories.pngCount || 0,
+      dngCount: fileCategories.dng || fileCategories.dngCount || 0,
       jpgCount: fileCategories.jpg || fileCategories.jpgCount || 0
     });
   }
@@ -32,7 +33,8 @@ class WorkerProgressReporter extends ProgressReporter {
   }
 
   logSuccess(filename, outputPath, fileType, details) {
-    this.send('success', { filename, outputFilename: require('path').basename(outputPath), fileType, details });
+    const outputFilename = outputPath ? require('path').basename(outputPath) : filename;
+    this.send('success', { filename, outputFilename, fileType, details });
   }
 
   logError(filename, error, fileType, operation) {
@@ -55,7 +57,7 @@ class WorkerProgressReporter extends ProgressReporter {
 async function run() {
   const { files, targetDirectory, options } = workerData;
   const reporter = new WorkerProgressReporter();
-  
+
   try {
     await batchProcessImages(files, targetDirectory, reporter, options);
   } catch (error) {

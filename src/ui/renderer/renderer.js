@@ -8,6 +8,7 @@ const progressText = document.getElementById('progressText');
 const heicCount = document.getElementById('heicCount');
 const livpCount = document.getElementById('livpCount');
 const pngCount = document.getElementById('pngCount');
+const dngCount = document.getElementById('dngCount');
 const jpgCount = document.getElementById('jpgCount');
 const logOutput = document.getElementById('logOutput');
 const summaryContainer = document.getElementById('summaryContainer');
@@ -31,15 +32,15 @@ let currentProcessedDir = ''; // To store the path of the output directory
  * Helper function to format bytes into readable string (e.g., 1.2 MB)
  */
 function formatBytes(bytes, decimals = 1) {
-    if (bytes === 0) return '0 Bytes';
+  if (bytes === 0) return '0 Bytes';
 
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
 
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
 // Update quality value display
@@ -110,7 +111,7 @@ async function handleAddFolder() {
     showError('选择的不是一个有效的文件夹');
     return;
   }
-  
+
   startProcessing(dirPath);
 }
 
@@ -123,7 +124,7 @@ async function handleDrop(e) {
   // Get the first item's path using Electron's webUtils
   const file = files[0];
   const filePath = window.electronAPI.getPathForFile(file);
-  
+
   if (!filePath) {
     showError('无法获取文件路径');
     return;
@@ -142,28 +143,28 @@ async function handleDrop(e) {
 
 async function startProcessing(dirPath) {
   isProcessing = true;
-  
+
   // Set the expected output directory
   currentProcessedDir = `${dirPath}/jpg`;
-  
+
   // Show processing panel
   dropZone.classList.add('hidden');
   processingPanel.classList.remove('hidden');
   summaryContainer.classList.add('hidden');
-  
+
   // Reset UI
   currentFolder.textContent = dirPath;
   progressFill.style.width = '0%';
   progressText.textContent = '0%';
   heicCount.textContent = '0';
   livpCount.textContent = '0';
-  pngCount.textContent = '0';
+  pngCount.textContent = '0'; dngCount.textContent = '0';
   jpgCount.textContent = '0';
   logOutput.innerHTML = '';
-  
+
   // Subscribe to log messages
   unsubscribeLog = window.electronAPI.onProcessingLog(handleLogMessage);
-  
+
   // Start processing
   try {
     const options = {
@@ -171,7 +172,7 @@ async function startProcessing(dirPath) {
       compressJpg: compressJpg.checked
     };
     const result = await window.electronAPI.processDirectory(dirPath, options);
-    
+
     if (!result.success) {
       addLogEntry('error', `错误: ${result.error}`);
       showSummary(false, { error: result.error });
@@ -180,7 +181,7 @@ async function startProcessing(dirPath) {
     addLogEntry('error', `错误: ${error.message}`);
     showSummary(false, { error: error.message });
   }
-  
+
   isProcessing = false;
 }
 
@@ -190,17 +191,18 @@ function handleLogMessage(data) {
       heicCount.textContent = data.heicCount;
       livpCount.textContent = data.livpCount;
       pngCount.textContent = data.pngCount;
+      dngCount.textContent = data.dngCount || 0;
       jpgCount.textContent = data.jpgCount;
       addLogEntry('start', `开始处理...`);
       addLogEntry('info', `发现 ${data.totalFiles} 个文件待处理`);
       break;
-      
+
     case 'processing':
       progressFill.style.width = `${data.progress}%`;
       progressText.textContent = `${data.progress}%`;
       addLogEntry('processing', `[${data.current}/${data.total}] 正在处理 ${data.fileType.toUpperCase()}: ${data.filename}`);
       break;
-      
+
     case 'success':
       let msg = `  完成: ${data.filename} → ${data.outputFilename}`;
       if (data.details && data.details.compressionRatio) {
@@ -210,25 +212,25 @@ function handleLogMessage(data) {
       }
       addLogEntry('success', msg);
       break;
-      
+
     case 'error':
       addLogEntry('error', `  失败: ${data.filename} - ${data.error}`);
       break;
-      
+
     case 'warning':
       addLogEntry('warning', `  警告: ${data.message}`);
       break;
-      
+
     case 'info':
       addLogEntry('info', `  ${data.message}`);
       break;
-      
+
     case 'done':
       progressFill.style.width = '100%';
       progressText.textContent = '100%';
       // Note: Worker sends stats object inside data.stats
       showSummary(data.stats.failedConversions === 0, data.stats);
-      
+
       // Unsubscribe from log messages
       if (unsubscribeLog) {
         unsubscribeLog();
@@ -255,7 +257,7 @@ function showSummary(success, data) {
   const statsContainer = document.getElementById('statsContainer');
   statsContainer.classList.add('hidden');
   summaryContainer.classList.remove('hidden');
-  
+
   if (success) {
     summaryIcon.textContent = '🎉';
     summaryTitle.textContent = '全部处理成功！';
@@ -269,7 +271,7 @@ function showSummary(success, data) {
     summaryTitle.textContent = '处理完成，但有部分失败';
     summaryTitle.style.color = 'var(--warning)';
   }
-  
+
   summaryDuration.textContent = data.duration ? `${data.duration}秒` : '-';
   summaryTotal.textContent = data.totalFiles || 0;
   summarySuccess.textContent = data.successfulConversions || 0;

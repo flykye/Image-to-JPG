@@ -14,7 +14,7 @@ function scanDirectory(dirPath) {
 
   const files = fs.readdirSync(dirPath);
   const supportedFiles = [];
-  const stats = { total: 0, heic: 0, livp: 0, png: 0, jpg: 0 };
+  const stats = { total: 0, heic: 0, livp: 0, png: 0, dng: 0, jpg: 0 };
 
   for (const file of files) {
     const fullPath = path.join(dirPath, file);
@@ -63,6 +63,10 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function (files, targetDi
     try {
       const result = await factory.convert(filePath, outputDir, finalOptions);
       if (result.success) {
+        // 确保outputPath存在
+        if (!result.outputPath) {
+          throw new Error('Conversion succeeded but output path is missing');
+        }
         processingStats.successfulConversions++;
         progressReporter.logSuccess(filename, result.outputPath, converter.type, result.details || {});
       } else {
@@ -77,7 +81,7 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function (files, targetDi
 
   processingStats.endTime = new Date();
   processingStats.duration = (processingStats.endTime - processingStats.startTime) / 1000;
-  
+
   progressReporter.logSummary();
 
   return { success: true, stats: processingStats };
