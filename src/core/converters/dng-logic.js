@@ -194,6 +194,7 @@ async function convertDngToJpgWithImageMagick(inputPath, outputPath, options = {
  */
 async function convertDngToJpg(inputPath, outputPath, options = {}) {
     const { quality = 95 } = options;
+    const { forceType = null } = options;
 
     // 基本验证
     if (!fs.existsSync(inputPath)) {
@@ -207,7 +208,7 @@ async function convertDngToJpg(inputPath, outputPath, options = {}) {
     }
 
     const inputExt = path.extname(inputPath).toLowerCase();
-    if (inputExt !== '.dng') {
+    if (inputExt !== '.dng' && forceType !== 'dng') {
         return {
             success: false,
             inputPath,

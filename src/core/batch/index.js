@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { factory } = require('../converters');
 const { prepareOutputDirectory } = require('../services/file-manager');
+const { detectFileType } = require('../services/file-signature');
 const { wrapAsyncWithTryCatch, safeExecute, ErrorTypes } = require('../services/error-handler');
 
 /**
@@ -14,14 +15,15 @@ function scanDirectory(dirPath) {
 
   const files = fs.readdirSync(dirPath);
   const supportedFiles = [];
-  const stats = { total: 0, heic: 0, livp: 0, png: 0, dng: 0, jpg: 0 };
+  const stats = { total: 0, heic: 0, livp: 0, png: 0, dng: 0, tiff: 0, jpg: 0 };
 
   for (const file of files) {
     const fullPath = path.join(dirPath, file);
     const fstat = safeExecute(fs.statSync, [fullPath], () => null, null);
 
     if (fstat && fstat.isFile()) {
-      const converter = factory.getConverter(file);
+      const detection = detectFileType(fullPath);
+      const converter = detection.type ? factory.getConverterByType(detection.type) : null;
       if (converter) {
         supportedFiles.push(fullPath);
         stats[converter.type]++;
@@ -31,6 +33,27 @@ function scanDirectory(dirPath) {
   }
 
   return { success: true, files: supportedFiles, stats };
+}
+
+function getExpectedOutputPath(filePath, type, outputDir) {
+  const baseName = path.basename(filePath, path.extname(filePath));
+  if (type === 'jpg') {
+    return path.join(outputDir, path.basename(filePath));
+  }
+  return path.join(outputDir, `${baseName}.jpg`);
+}
+
+async function runWithConcurrency(items, concurrency, handler) {
+  const limit = Math.max(1, concurrency || 1);
+  let index = 0;
+  const workers = new Array(limit).fill(null).map(async () => {
+    while (true) {
+      const currentIndex = index++;
+      if (currentIndex >= items.length) break;
+      await handler(items[currentIndex], currentIndex);
+    }
+  });
+  await Promise.all(workers);
 }
 
 /**
@@ -52,32 +75,65 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function (files, targetDi
 
   progressReporter.logStart(targetDirectory, fileStats || { totalFiles: files.length });
 
-  for (let i = 0; i < files.length; i++) {
-    const filePath = files[i];
-    const filename = path.basename(filePath);
-    const converter = factory.getConverter(filePath);
+  let startedCount = 0;
 
-    processingStats.processedFiles++;
-    progressReporter.logFileProcessing(filename, converter.type, i + 1, files.length);
+  await runWithConcurrency(files, options.concurrency, async (filePath) => {
+    const filename = path.basename(filePath);
+    const detection = detectFileType(filePath);
+    const converter = detection.type ? factory.getConverterByType(detection.type) : null;
+
+    if (detection.warning) {
+      progressReporter.logWarning(`${filename}: ${detection.warning}`);
+    }
+
+    if (!converter) {
+      processingStats.failedConversions++;
+      processingStats.errors.push({ filename, error: 'No converter found for detected file type' });
+      progressReporter.logError(filename, 'No converter found for detected file type', detection.type || 'unknown');
+      processingStats.processedFiles++;
+      return;
+    }
+
+    const currentIndex = ++startedCount;
+    progressReporter.logFileProcessing(filename, converter.type, currentIndex, files.length);
 
     try {
-      const result = await factory.convert(filePath, outputDir, finalOptions);
+      if (options.skipExisting) {
+        const expectedOutputPath = getExpectedOutputPath(filePath, converter.type, outputDir);
+        if (fs.existsSync(expectedOutputPath)) {
+          processingStats.successfulConversions++;
+          progressReporter.logSuccess(filename, expectedOutputPath, converter.type, {
+            converted: false,
+            originalFormat: converter.type,
+            skipped: true
+          });
+          return;
+        }
+      }
+
+      const result = await factory.convertByType(filePath, converter.type, outputDir, {
+        ...finalOptions,
+        forceType: converter.type
+      });
       if (result.success) {
-        // 确保outputPath存在
         if (!result.outputPath) {
           throw new Error('Conversion succeeded but output path is missing');
         }
         processingStats.successfulConversions++;
         progressReporter.logSuccess(filename, result.outputPath, converter.type, result.details || {});
       } else {
-        throw new Error(result.error);
+        processingStats.failedConversions++;
+        processingStats.errors.push({ filename, error: result.error || 'Unknown conversion error' });
+        progressReporter.logError(filename, result.error || 'Unknown conversion error', converter.type);
       }
     } catch (error) {
       processingStats.failedConversions++;
       processingStats.errors.push({ filename, error: error.message });
       progressReporter.logError(filename, error.message, converter.type);
+    } finally {
+      processingStats.processedFiles++;
     }
-  }
+  });
 
   processingStats.endTime = new Date();
   processingStats.duration = (processingStats.endTime - processingStats.startTime) / 1000;

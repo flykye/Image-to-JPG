@@ -40,5 +40,18 @@ class DngConverter extends ImageConverter {
   }
 }
 
-module.exports = { HeicConverter, PngConverter, DngConverter };
+class TiffConverter extends ImageConverter {
+  supports(filePath) {
+    const lower = filePath.toLowerCase();
+    return lower.endsWith('.tif') || lower.endsWith('.tiff');
+  }
 
+  get type() { return 'tiff'; }
+
+  async convert(filePath, outputDir, options) {
+    const { convertTiffToJpgAuto } = require('./tiff-logic');
+    return await convertTiffToJpgAuto(filePath, outputDir, options);
+  }
+}
+
+module.exports = { HeicConverter, PngConverter, DngConverter, TiffConverter };

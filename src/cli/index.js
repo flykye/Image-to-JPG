@@ -7,6 +7,12 @@ const { ProgressReporter } = require('../core/services/progress-reporter');
 
 const program = new Command();
 
+function parsePositiveInteger(value, defaultValue = 1) {
+  const parsed = Number.parseInt(String(value), 10);
+  if (Number.isNaN(parsed) || parsed < 1) return defaultValue;
+  return parsed;
+}
+
 program
   .name('batch-image-processor')
   .description('Batch process HEIC, LIVP and PNG files in a directory')
@@ -15,6 +21,7 @@ program
   .option('-v, --verbose', 'Enable verbose logging')
   .option('-s, --skip-existing', 'Skip processing files that already have JPG versions')
   .option('-o, --output-dir <path>', 'Custom output directory')
+  .option('-c, --concurrency <number>', 'Number of files to process concurrently', (value) => parsePositiveInteger(value, 1), 1)
   .option('-q, --quality <number>', 'JPG output quality (1-100)', parseInt, 95)
   .option('--compress-jpg', 'Compress existing JPG files')
   .action(async (directory, options) => {
@@ -45,6 +52,8 @@ program
         outputDir: options.outputDir,
         quality: options.quality,
         compressJpg: options.compressJpg,
+        skipExisting: options.skipExisting,
+        concurrency: options.concurrency,
         clearExisting: false,
         stats: scanResult.stats
       }

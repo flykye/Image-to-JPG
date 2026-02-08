@@ -12,6 +12,8 @@ class ProcessingStats {
     this.heicFiles = 0;
     this.livpFiles = 0;
     this.pngFiles = 0;
+    this.dngFiles = 0;
+    this.tiffFiles = 0;
     this.jpgFiles = 0; // 新增JPG文件统计
     this.successfulConversions = 0;
     this.failedConversions = 0;
@@ -28,8 +30,10 @@ class ProcessingStats {
     this.heicFiles = fileCategories.heicFiles.length;
     this.livpFiles = fileCategories.livpFiles.length;
     this.pngFiles = fileCategories.pngFiles ? fileCategories.pngFiles.length : 0;
+    this.dngFiles = fileCategories.dngFiles ? fileCategories.dngFiles.length : 0;
+    this.tiffFiles = fileCategories.tiffFiles ? fileCategories.tiffFiles.length : 0;
     this.jpgFiles = fileCategories.jpgFiles ? fileCategories.jpgFiles.length : 0; // 初始化JPG文件统计
-    this.totalFiles = this.heicFiles + this.livpFiles + this.pngFiles + this.jpgFiles;
+    this.totalFiles = this.heicFiles + this.livpFiles + this.pngFiles + this.dngFiles + this.tiffFiles + this.jpgFiles;
     this.startTime = new Date();
   }
 
@@ -115,6 +119,8 @@ class ProgressReporter {
       heicFiles: fileCategories.heicFiles || (fileCategories.heic ? Array(fileCategories.heic).fill(null) : []),
       livpFiles: fileCategories.livpFiles || (fileCategories.livp ? Array(fileCategories.livp).fill(null) : []),
       pngFiles: fileCategories.pngFiles || (fileCategories.png ? Array(fileCategories.png).fill(null) : []),
+      dngFiles: fileCategories.dngFiles || (fileCategories.dng ? Array(fileCategories.dng).fill(null) : []),
+      tiffFiles: fileCategories.tiffFiles || (fileCategories.tiff ? Array(fileCategories.tiff).fill(null) : []),
       jpgFiles: fileCategories.jpgFiles || (fileCategories.jpg ? Array(fileCategories.jpg).fill(null) : []),
       totalFiles: fileCategories.totalFiles || fileCategories.total || 0
     };
@@ -128,6 +134,8 @@ class ProgressReporter {
     console.log(`📊 Found ${stats.heicFiles.length} HEIC files`);
     console.log(`📊 Found ${stats.livpFiles.length} LIVP files`);
     console.log(`📊 Found ${stats.pngFiles.length} PNG files`);
+    console.log(`📊 Found ${stats.dngFiles.length} DNG files`);
+    console.log(`📊 Found ${stats.tiffFiles.length} TIFF files`);
     console.log(`📊 Found ${stats.jpgFiles.length} JPG files`);
     console.log(`📊 Total files to process: ${stats.totalFiles}`);
     
@@ -148,6 +156,18 @@ class ProgressReporter {
       if (fileCategories.pngFiles && fileCategories.pngFiles.length > 0) {
         console.log('  PNG files:');
         fileCategories.pngFiles.forEach(file => {
+          console.log(`    • ${file}`);
+        });
+      }
+      if (fileCategories.dngFiles && fileCategories.dngFiles.length > 0) {
+        console.log('  DNG files:');
+        fileCategories.dngFiles.forEach(file => {
+          console.log(`    • ${file}`);
+        });
+      }
+      if (fileCategories.tiffFiles && fileCategories.tiffFiles.length > 0) {
+        console.log('  TIFF files:');
+        fileCategories.tiffFiles.forEach(file => {
           console.log(`    • ${file}`);
         });
       }

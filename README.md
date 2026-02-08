@@ -1,6 +1,6 @@
 # Image to JPG
 
-一个强大的跨平台 **Electron GUI 应用**，专门用于将 HEIC、LIVP、PNG、DNG 等格式图片批量、高质量地转换为 JPG 格式。同时保留了强大的 **命令行 (CLI)** 模式。
+一个强大的跨平台 **Electron GUI 应用**，专门用于将 HEIC、LIVP、PNG、DNG、TIFF 等格式图片批量、高质量地转换为 JPG 格式。同时保留了强大的 **命令行 (CLI)** 模式。
 
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen)](https://nodejs.org)
 [![Electron App](https://img.shields.io/badge/Platform-Electron-blue)](https://www.electronjs.org/)
@@ -38,7 +38,8 @@ npm run build:win
 - **实时反馈**: 详细的实时处理日志、进度条和结果统计。
 
 ### 核心处理能力
-- **批量转换**: 自动扫描并处理 HEIC、LIVP、PNG、DNG 和 JPG (可选压缩) 文件。
+- **批量转换**: 自动扫描并处理 HEIC、LIVP、PNG、DNG、TIFF 和 JPG (可选压缩) 文件。
+- **文件头识别**: 优先使用文件头 (magic number) 判断格式，扩展名与实际类型不一致时自动按真实类型处理并给出警告。
 - **格式转换**: 将 HEIC、PNG 和 DNG (RAW) 文件转换为 JPG 格式，保持高质量。
 - **LIVP 提取**: 从 Apple 的 LIVP 图像包中提取图像，并转换为 JPG。
 - **DNG 支持**: 支持 Adobe Digital Negative RAW 格式，使用内置预览设置处理白平衡。
@@ -46,7 +47,7 @@ npm run build:win
 - **智能重命名**: 自动处理文件命名冲突。
 
 ### 命令行 (CLI) 模式
-- **并发处理**: 支持多线程并发，大幅提升大批量文件的处理速度。
+- **并发处理**: 支持文件级并发，大幅提升大批量文件的处理速度。
 - **灵活配置**: 丰富的命令行选项（如 `--concurrency`, `--output-dir`, `--skip-existing` 等）满足自动化需求。
 - **错误恢复**: 单个文件失败不影响整体处理，自动记录详细错误信息。
 - **性能优化**: 可选的积极内存清理模式 (`--memory-cleanup`)。
@@ -193,7 +194,8 @@ batch-image-processor <目录路径>
 ## 处理流程
 
 1. 程序接受目标目录路径作为命令行参数（或 GUI 拖拽/选择）
-2. 扫描目录中的所有HEIC、LIVP、PNG、DNG和JPG文件
+2. 扫描目录中的所有HEIC、LIVP、PNG、DNG、TIFF和JPG文件
+   - 优先使用文件头识别真实格式，扩展名冲突时按真实类型处理并给出警告
 3. 处理HEIC文件：将其转换为JPG格式
 4. 处理PNG文件：将其转换为JPG格式
 5. 处理DNG文件：将RAW格式转换为JPG格式（使用内置预览设置）

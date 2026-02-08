@@ -9,6 +9,7 @@ const heicCount = document.getElementById('heicCount');
 const livpCount = document.getElementById('livpCount');
 const pngCount = document.getElementById('pngCount');
 const dngCount = document.getElementById('dngCount');
+const tiffCount = document.getElementById('tiffCount');
 const jpgCount = document.getElementById('jpgCount');
 const logOutput = document.getElementById('logOutput');
 const summaryContainer = document.getElementById('summaryContainer');
@@ -192,6 +193,7 @@ function handleLogMessage(data) {
       livpCount.textContent = data.livpCount;
       pngCount.textContent = data.pngCount;
       dngCount.textContent = data.dngCount || 0;
+      tiffCount.textContent = data.tiffCount || 0;
       jpgCount.textContent = data.jpgCount;
       addLogEntry('start', `开始处理...`);
       addLogEntry('info', `发现 ${data.totalFiles} 个文件待处理`);

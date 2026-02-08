@@ -18,6 +18,7 @@ class WorkerProgressReporter extends ProgressReporter {
       livpCount: fileCategories.livp || fileCategories.livpCount || 0,
       pngCount: fileCategories.png || fileCategories.pngCount || 0,
       dngCount: fileCategories.dng || fileCategories.dngCount || 0,
+      tiffCount: fileCategories.tiff || fileCategories.tiffCount || 0,
       jpgCount: fileCategories.jpg || fileCategories.jpgCount || 0
     });
   }
@@ -39,6 +40,10 @@ class WorkerProgressReporter extends ProgressReporter {
 
   logError(filename, error, fileType, operation) {
     this.send('error', { filename, error, fileType, operation });
+  }
+
+  logWarning(message) {
+    this.send('warning', { message });
   }
 
   logSummary() {

@@ -13,6 +13,10 @@ class ConverterFactory {
     this.converters.push(converter);
   }
 
+  getConverterByType(type) {
+    return this.converters.find(c => c.type === type);
+  }
+
   getConverter(filePath) {
     return this.converters.find(c => c.supports(filePath));
   }
@@ -25,21 +29,30 @@ class ConverterFactory {
     return await converter.convert(filePath, outputDir, options);
   }
 
+  async convertByType(filePath, type, outputDir, options) {
+    const converter = this.getConverterByType(type);
+    if (!converter) {
+      throw new Error(`No converter found for type: ${type}`);
+    }
+    return await converter.convert(filePath, outputDir, options);
+  }
+
   getSupportedExtensions() {
-    return ['.heic', '.livp', '.png', '.dng', '.jpg', '.jpeg'];
+    return ['.heic', '.livp', '.png', '.dng', '.tif', '.tiff', '.jpg', '.jpeg'];
   }
 }
 
 const factory = new ConverterFactory();
 
 // 注册转换器
-const { HeicConverter, PngConverter, DngConverter } = require('./image-converters');
+const { HeicConverter, PngConverter, DngConverter, TiffConverter } = require('./image-converters');
 const { LivpConverter } = require('./livp-converter');
 const { JpgConverter } = require('./jpg-converter');
 
 factory.register(new HeicConverter());
 factory.register(new PngConverter());
 factory.register(new DngConverter());
+factory.register(new TiffConverter());
 factory.register(new LivpConverter());
 factory.register(new JpgConverter());
 

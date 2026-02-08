@@ -185,6 +185,7 @@ async function convertHeicToJpgWithImageMagick(inputPath, outputPath, options = 
  */
 async function convertHeicToJpg(inputPath, outputPath, options = {}) {
   const { quality = 90 } = options;
+  const { forceType = null } = options;
 
   // Basic validation
   if (!fs.existsSync(inputPath)) {
@@ -198,7 +199,7 @@ async function convertHeicToJpg(inputPath, outputPath, options = {}) {
   }
 
   const inputExt = path.extname(inputPath).toLowerCase();
-  if (inputExt !== '.heic') {
+  if (inputExt !== '.heic' && forceType !== 'heic') {
     return {
       success: false,
       inputPath,
