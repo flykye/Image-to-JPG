@@ -109,6 +109,80 @@ body {
   background-color: var(--accent-hover);
 }
 
+/* Folder List */
+.folder-list {
+  max-height: 150px;
+  overflow-y: auto;
+  margin-top: 16px;
+  width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: left;
+  pointer-events: auto;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.folder-item .folder-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-item .remove-folder-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.folder-item .remove-folder-btn:hover {
+  color: var(--error);
+}
+
+/* Start Processing Button */
+.start-processing-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 16px;
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
+.start-processing-btn:hover {
+  background-color: #218838;
+}
+
+.start-processing-btn:disabled {
+  background-color: var(--text-muted);
+  cursor: not-allowed;
+}
+
 /* Settings Panel */
 .settings-panel {
   background-color: var(--bg-secondary);
@@ -195,6 +269,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-left: 60px;
 }
 
 .progress-bar {
@@ -403,4 +478,71 @@ body {
 
 .log-output::-webkit-scrollbar-thumb:hover {
   background-color: var(--text-muted);
+}
+
+/* Folder Stats List */
+.folder-stats-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.folder-stats-item {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.folder-stats-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.folder-stats-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
+}
+
+.folder-stats-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background-color: var(--success);
+  color: white;
+}
+
+.folder-stats-badge.error {
+  background-color: var(--error);
+}
+
+.folder-stats-badge.warning {
+  background-color: var(--warning);
+}
+
+.folder-stats-types {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.folder-stats-types span {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.folder-stats-types .count {
+  color: var(--text-secondary);
+  font-weight: 500;
 }

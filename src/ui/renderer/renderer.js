@@ -1,8 +1,10 @@
 // DOM Elements
 const dropZone = document.getElementById('dropZone');
 const addFolderBtn = document.getElementById('addFolderBtn');
+const folderList = document.getElementById('folderList');
+const startProcessingBtn = document.getElementById('startProcessingBtn');
+const folderCount = document.getElementById('folderCount');
 const processingPanel = document.getElementById('processingPanel');
-const currentFolder = document.getElementById('currentFolder');
 const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
 const heicCount = document.getElementById('heicCount');
@@ -20,14 +22,18 @@ const summaryTotal = document.getElementById('summaryTotal');
 const summarySuccess = document.getElementById('summarySuccess');
 const summaryFailed = document.getElementById('summaryFailed');
 const newProcessBtn = document.getElementById('newProcessBtn');
-const openFolderBtn = document.getElementById('openFolderBtn'); // New button element
+const openFolderBtn = document.getElementById('openFolderBtn');
 const qualityRange = document.getElementById('qualityRange');
 const qualityValue = document.getElementById('qualityValue');
 const compressJpg = document.getElementById('compressJpg');
+const folderStatsList = document.getElementById('folderStatsList');
 
 let isProcessing = false;
 let unsubscribeLog = null;
-let currentProcessedDir = ''; // To store the path of the output directory
+let currentProcessedDir = '';
+let queuedFolders = [];
+let folderStats = [];
+let currentFolderStats = null;
 
 /**
  * Helper function to format bytes into readable string (e.g., 1.2 MB)
@@ -96,7 +102,6 @@ dropZone.addEventListener('drop', handleDrop, false);
 addFolderBtn.addEventListener('click', handleAddFolder);
 
 async function handleAddFolder() {
-  addLogEntry('info', 'Add Folder button clicked.');
   if (isProcessing) return;
 
   const result = await window.electronAPI.openFileDialog();
@@ -106,14 +111,13 @@ async function handleAddFolder() {
 
   const dirPath = result.filePaths[0];
 
-  // Validate if it's a directory (optional, as dialog filters generally handle this)
   const validationResult = await window.electronAPI.validateDirectory(dirPath);
   if (!validationResult.success || !validationResult.isDirectory) {
     showError('选择的不是一个有效的文件夹');
     return;
   }
 
-  startProcessing(dirPath);
+  addFolderToQueue(dirPath);
 }
 
 async function handleDrop(e) {
@@ -122,7 +126,6 @@ async function handleDrop(e) {
   const files = e.dataTransfer.files;
   if (files.length === 0) return;
 
-  // Get the first item's path using Electron's webUtils
   const file = files[0];
   const filePath = window.electronAPI.getPathForFile(file);
 
@@ -131,30 +134,151 @@ async function handleDrop(e) {
     return;
   }
 
-  // Validate if it's a directory
   const result = await window.electronAPI.validateDirectory(filePath);
   if (!result.success || !result.isDirectory) {
     showError('请拖入文件夹，而不是文件');
     return;
   }
 
-  // Start processing
-  startProcessing(filePath);
+  addFolderToQueue(filePath);
+}
+
+function addFolderToQueue(dirPath) {
+  if (queuedFolders.includes(dirPath)) {
+    return;
+  }
+
+  queuedFolders.push(dirPath);
+  renderFolderList();
+}
+
+function renderFolderList() {
+  folderList.innerHTML = '';
+
+  queuedFolders.forEach((folderPath, index) => {
+    const folderName = folderPath.split(/[/\\]/).pop();
+    const item = document.createElement('div');
+    item.className = 'folder-item';
+    item.innerHTML = `
+      <span class="folder-name" title="${folderPath}">${folderName}</span>
+      <button class="remove-folder-btn" data-index="${index}">&times;</button>
+    `;
+    folderList.appendChild(item);
+  });
+
+  folderCount.textContent = queuedFolders.length;
+
+  if (queuedFolders.length > 0) {
+    startProcessingBtn.classList.remove('hidden');
+  } else {
+    startProcessingBtn.classList.add('hidden');
+  }
+}
+
+folderList.addEventListener('click', (e) => {
+  if (e.target.classList.contains('remove-folder-btn')) {
+    const index = parseInt(e.target.dataset.index);
+    queuedFolders.splice(index, 1);
+    renderFolderList();
+  }
+});
+
+startProcessingBtn.addEventListener('click', startBatchProcessing);
+
+async function startBatchProcessing() {
+  if (isProcessing || queuedFolders.length === 0) return;
+
+  isProcessing = true;
+  startProcessingBtn.disabled = true;
+  addFolderBtn.disabled = true;
+
+  dropZone.classList.add('hidden');
+  processingPanel.classList.remove('hidden');
+  summaryContainer.classList.add('hidden');
+  folderStatsList.innerHTML = '';
+
+  const statsContainer = document.getElementById('statsContainer');
+  statsContainer.classList.remove('hidden');
+
+  folderStats = [];
+
+  const options = {
+    quality: parseInt(qualityRange.value),
+    compressJpg: compressJpg.checked
+  };
+
+  unsubscribeLog = window.electronAPI.onProcessingLog(handleLogMessage);
+
+  for (let i = 0; i < queuedFolders.length; i++) {
+    const dirPath = queuedFolders[i];
+    currentProcessedDir = `${dirPath}/jpg`;
+
+    currentFolderStats = {
+      folderPath: dirPath,
+      folderName: dirPath.split(/[/\\]/).pop(),
+      totalFiles: 0,
+      successfulConversions: 0,
+      failedConversions: 0,
+      heic: 0,
+      livp: 0,
+      png: 0,
+      dng: 0,
+      tiff: 0,
+      jpg: 0,
+      duration: 0,
+      startTime: Date.now()
+    };
+
+    progressFill.style.width = '0%';
+    progressText.textContent = '0%';
+    heicCount.textContent = '0';
+    livpCount.textContent = '0';
+    pngCount.textContent = '0';
+    dngCount.textContent = '0';
+    tiffCount.textContent = '0';
+    jpgCount.textContent = '0';
+    logOutput.innerHTML = '';
+
+    addLogEntry('info', `开始处理第 ${i + 1}/${queuedFolders.length} 个文件夹: ${dirPath}`);
+
+    try {
+      const result = await window.electronAPI.processDirectory(dirPath, options);
+      if (!result.success) {
+        addLogEntry('error', `错误: ${result.error}`);
+      }
+    } catch (error) {
+      addLogEntry('error', `错误: ${error.message}`);
+    }
+
+    currentFolderStats.duration = ((Date.now() - currentFolderStats.startTime) / 1000).toFixed(1);
+    folderStats.push(currentFolderStats);
+  }
+
+  isProcessing = false;
+  startProcessingBtn.disabled = false;
+  addFolderBtn.disabled = false;
+  queuedFolders = [];
+  renderFolderList();
+
+  renderFolderStatsSummary();
+
+  if (unsubscribeLog) {
+    unsubscribeLog();
+    unsubscribeLog = null;
+  }
+
+  addLogEntry('info', '所有文件夹处理完成！');
 }
 
 async function startProcessing(dirPath) {
   isProcessing = true;
 
-  // Set the expected output directory
   currentProcessedDir = `${dirPath}/jpg`;
 
-  // Show processing panel
   dropZone.classList.add('hidden');
   processingPanel.classList.remove('hidden');
   summaryContainer.classList.add('hidden');
 
-  // Reset UI
-  currentFolder.textContent = dirPath;
   progressFill.style.width = '0%';
   progressText.textContent = '0%';
   heicCount.textContent = '0';
@@ -163,10 +287,8 @@ async function startProcessing(dirPath) {
   jpgCount.textContent = '0';
   logOutput.innerHTML = '';
 
-  // Subscribe to log messages
   unsubscribeLog = window.electronAPI.onProcessingLog(handleLogMessage);
 
-  // Start processing
   try {
     const options = {
       quality: parseInt(qualityRange.value),
@@ -195,6 +317,17 @@ function handleLogMessage(data) {
       dngCount.textContent = data.dngCount || 0;
       tiffCount.textContent = data.tiffCount || 0;
       jpgCount.textContent = data.jpgCount;
+      
+      if (currentFolderStats) {
+        currentFolderStats.totalFiles = data.totalFiles;
+        currentFolderStats.heic = data.heicCount;
+        currentFolderStats.livp = data.livpCount;
+        currentFolderStats.png = data.pngCount;
+        currentFolderStats.dng = data.dngCount || 0;
+        currentFolderStats.tiff = data.tiffCount || 0;
+        currentFolderStats.jpg = data.jpgCount;
+      }
+      
       addLogEntry('start', `开始处理...`);
       addLogEntry('info', `发现 ${data.totalFiles} 个文件待处理`);
       break;
@@ -206,6 +339,9 @@ function handleLogMessage(data) {
       break;
 
     case 'success':
+      if (currentFolderStats) {
+        currentFolderStats.successfulConversions++;
+      }
       let msg = `  完成: ${data.filename} → ${data.outputFilename}`;
       if (data.details && data.details.compressionRatio) {
         const inputSize = formatBytes(data.details.inputSize || 0);
@@ -216,6 +352,9 @@ function handleLogMessage(data) {
       break;
 
     case 'error':
+      if (currentFolderStats) {
+        currentFolderStats.failedConversions++;
+      }
       addLogEntry('error', `  失败: ${data.filename} - ${data.error}`);
       break;
 
@@ -230,13 +369,9 @@ function handleLogMessage(data) {
     case 'done':
       progressFill.style.width = '100%';
       progressText.textContent = '100%';
-      // Note: Worker sends stats object inside data.stats
-      showSummary(data.stats.failedConversions === 0, data.stats);
-
-      // Unsubscribe from log messages
-      if (unsubscribeLog) {
-        unsubscribeLog();
-        unsubscribeLog = null;
+      
+      if (currentFolderStats) {
+        currentFolderStats.duration = ((Date.now() - currentFolderStats.startTime) / 1000).toFixed(1);
       }
       break;
   }
@@ -254,30 +389,72 @@ function showError(message) {
   addLogEntry('error', `操作失败: ${message}`);
 }
 
-function showSummary(success, data) {
-  // 隐藏处理中的计数器，显示最终总结
+function renderFolderStatsSummary() {
   const statsContainer = document.getElementById('statsContainer');
   statsContainer.classList.add('hidden');
   summaryContainer.classList.remove('hidden');
 
-  if (success) {
+  folderStatsList.innerHTML = '';
+  
+  let totalFiles = 0;
+  let totalSuccess = 0;
+  let totalFailed = 0;
+  let totalDuration = 0;
+  
+  folderStats.forEach((stat, index) => {
+    totalFiles += stat.totalFiles;
+    totalSuccess += stat.successfulConversions;
+    totalFailed += stat.failedConversions;
+    totalDuration += parseFloat(stat.duration);
+    
+    const hasErrors = stat.failedConversions > 0;
+    const allSuccess = stat.failedConversions === 0 && stat.successfulConversions > 0;
+    
+    const item = document.createElement('div');
+    item.className = 'folder-stats-item';
+    item.innerHTML = `
+      <div class="folder-stats-header">
+        <span class="folder-stats-name" title="${stat.folderPath}">${stat.folderName}</span>
+        <span class="folder-stats-badge ${hasErrors ? 'error' : allSuccess ? '' : 'warning'}">
+          ${hasErrors ? `${stat.failedConversions} 失败` : allSuccess ? '完成' : '完成'}
+        </span>
+      </div>
+      <div class="folder-stats-types">
+        ${stat.heic > 0 ? `<span>HEIC <b class="count">${stat.heic}</b></span>` : ''}
+        ${stat.livp > 0 ? `<span>LIVP <b class="count">${stat.livp}</b></span>` : ''}
+        ${stat.png > 0 ? `<span>PNG <b class="count">${stat.png}</b></span>` : ''}
+        ${stat.dng > 0 ? `<span>DNG <b class="count">${stat.dng}</b></span>` : ''}
+        ${stat.tiff > 0 ? `<span>TIFF <b class="count">${stat.tiff}</b></span>` : ''}
+        ${stat.jpg > 0 ? `<span>JPG <b class="count">${stat.jpg}</b></span>` : ''}
+        <span>耗时: ${stat.duration}秒</span>
+      </div>
+    `;
+    folderStatsList.appendChild(item);
+  });
+
+  const allSuccess = totalFailed === 0 && totalSuccess > 0;
+  if (allSuccess) {
     summaryIcon.textContent = '🎉';
     summaryTitle.textContent = '全部处理成功！';
     summaryTitle.style.color = 'var(--success)';
-  } else if (data.error) {
-    summaryIcon.textContent = '❌';
-    summaryTitle.textContent = '处理过程出错';
-    summaryTitle.style.color = 'var(--error)';
-  } else {
+  } else if (totalFailed > 0) {
     summaryIcon.textContent = '⚠️';
     summaryTitle.textContent = '处理完成，但有部分失败';
     summaryTitle.style.color = 'var(--warning)';
+  } else {
+    summaryIcon.textContent = '📁';
+    summaryTitle.textContent = '处理完成';
+    summaryTitle.style.color = 'var(--text-primary)';
   }
 
-  summaryDuration.textContent = data.duration ? `${data.duration}秒` : '-';
-  summaryTotal.textContent = data.totalFiles || 0;
-  summarySuccess.textContent = data.successfulConversions || 0;
-  summaryFailed.textContent = data.failedConversions || 0;
+  summaryDuration.textContent = `${totalDuration.toFixed(1)}秒`;
+  summaryTotal.textContent = totalFiles;
+  summarySuccess.textContent = totalSuccess;
+  summaryFailed.textContent = totalFailed;
+}
+
+function showSummary(success, data) {
+  renderFolderStatsSummary();
 }
 
 // Reset to initial state
@@ -286,6 +463,8 @@ newProcessBtn.addEventListener('click', () => {
   const statsContainer = document.getElementById('statsContainer');
   statsContainer.classList.remove('hidden');
   dropZone.classList.remove('hidden');
+  queuedFolders = [];
+  renderFolderList();
 });
 
 // Also allow drag and drop on processing panel for quick restart

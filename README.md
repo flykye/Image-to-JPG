@@ -55,7 +55,6 @@ npm run build:win
 ### 技术亮点
 - **双转换引擎**: 优先使用sharp库进行HEIC转换，自动回退到内置的 Wasm 解码器，并最终回退到 ImageMagick (CLI)。
 - **模块化架构**: 清晰的模块划分，便于维护和扩展。
-- **完整测试**: 使用Jest编写全面的单元测试和集成测试。
 - **详细日志**: 支持verbose模式，提供详细的处理信息。
 
 ## 架构与模块
@@ -64,73 +63,70 @@ npm run build:win
 
 ```
 Image to JPG/
-├── main.js                 # Electron主进程：窗口、IPC通信调度、文件对话框
-├── preload.js              # 预加载脚本：IPC安全桥接
-├── index.html              # 界面结构 (GUI)
-├── styles.css              # 界面样式 (GUI)
-├── renderer.js             # 渲染进程：UI逻辑、事件处理、日志显示
-├── batch-processor.js      # 核心逻辑：文件扫描、批量转换调度、CLI入口
-├── livp.js                 # LIVP文件提取模块
-├── heic-converter.js       # HEIC/PNG转JPG转换模块
-├── file-manager.js         # 文件管理和目录操作
-├── progress-reporter.js    # 进度报告和统计
-├── error-handler.js        # 统一错误处理
-├── test/                   # 测试套件
-│   ├── integration.test.js
-│   ├── batch-processor.test.js
-│   ├── command-line.test.js
-│   ├── error-handler.test.js
-│   ├── progress-reporter.test.js
-│   ├── file-manager.test.js
-│   └── heic-converter.test.js
-└── package.json            # 项目配置
+├── src/
+│   ├── ui/
+│   │   ├── main/
+│   │   │   ├── index.js           # Electron主进程：窗口、IPC通信调度
+│   │   │   ├── preload.js        # 预加载脚本：IPC安全桥接
+│   │   │   └── conversion-worker.js  # Worker线程处理转换
+│   │   └── renderer/
+│   │       ├── index.html         # 界面结构 (GUI)
+│   │       ├── styles.css        # 界面样式 (GUI)
+│   │       └── renderer.js       # 渲染进程：UI逻辑、事件处理
+│   ├── core/
+│   │   ├── converters/           # 格式转换器
+│   │   │   ├── index.js           # 转换器工厂
+│   │   │   ├── base.js            # 基类
+│   │   │   ├── image-converters.js # HEIC/PNG/DNG/TIFF转换
+│   │   │   ├── heic-logic.js      # HEIC转换逻辑
+│   │   │   ├── livp-logic.js      # LIVP提取逻辑
+│   │   │   ├── livp-converter.js  # LIVP转换器
+│   │   │   ├── dng-logic.js       # DNG转换逻辑
+│   │   │   ├── tiff-logic.js      # TIFF转换逻辑
+│   │   │   └── jpg-converter.js    # JPG转换器
+│   │   ├── services/             # 共享服务
+│   │   │   ├── file-manager.js    # 文件管理
+│   │   │   ├── file-signature.js  # 文件头识别
+│   │   │   ├── progress-reporter.js # 进度报告
+│   │   │   └── error-handler.js   # 错误处理
+│   │   └── batch/
+│   │       └── index.js          # 批处理编排
+│   └── cli/
+│       └── index.js              # CLI入口
+├── testimage/                    # 测试用图片文件
+├── assets/                       # 应用图标
+├── package.json
+└── AGENTS.md                    # 开发规范
 ```
 
 ### 核心模块说明
 
-#### main.js / renderer.js / preload.js
-Electron GUI 核心模块，负责窗口创建、用户界面交互、配置读取、以及主进程与渲染进程之间的 IPC 通信。
+#### src/ui/main/ - Electron主进程
+负责窗口创建、IPC通信调度、文件对话框，以及Worker线程管理转换任务。
 
-#### batch-processor.js
-核心处理模块，负责：
-- 命令行参数解析（使用commander）
-- 目录扫描和文件分类
-- 批量处理流程编排
-- 并发控制
+#### src/ui/renderer/ - 渲染进程
+负责用户界面交互、配置读取、以及主进程与渲染进程之间的IPC通信。
 
-#### livp.js
-LIVP文件处理模块，负责：
-- LIVP归档的解压和解析
-- 图像文件提取（支持HEIC/JPEG/JPG）
-- 内部HEIC到JPG的转换
-- 错误检测（损坏归档、空文件等）
+#### src/core/converters/ - 格式转换器
+- `index.js`: 转换器工厂，管理所有格式转换器
+- `base.js`: 转换器基类
+- `image-converters.js`: HEIC/PNG/DNG/TIFF转换器实现
+- `heic-logic.js`: HEIC转换核心逻辑（支持sharp + Wasm回退）
+- `livp-converter.js` / `livp-logic.js`: LIVP归档提取和转换
+- `dng-logic.js`: DNG RAW格式转换
+- `jpg-converter.js`: JPG压缩处理
 
-#### heic-converter.js
-图像转换模块，负责：
-- HEIC到JPG的转换
-- PNG到JPG的转换
-- 双引擎支持（sharp + ImageMagick/Wasm）
-- 质量控制和压缩
+#### src/core/services/ - 共享服务
+- `file-manager.js`: 输出目录管理、文件复制、冲突解决
+- `file-signature.js`: 文件头(magic number)识别真实格式
+- `progress-reporter.js`: 实时进度显示和统计
+- `error-handler.js`: 错误分类、安全执行包装器
 
-#### file-manager.js
-文件管理模块，负责：
-- 输出目录创建和管理
-- 文件复制和冲突解决
-- 权限和磁盘空间检查
+#### src/core/batch/ - 批处理
+负责目录扫描、文件分类、批量处理流程编排、并发控制。
 
-#### progress-reporter.js
-进度报告模块，负责：
-- 实时进度显示
-- 统计信息收集
-- 详细的处理报告
-- 错误日志记录
-
-#### error-handler.js
-错误处理模块，负责：
-- 错误分类和标准化
-- 安全执行包装器
-- 错误信息格式化
-- 重试机制
+#### src/cli/ - 命令行入口
+使用commander解析命令行参数，提供完整的CLI功能。
 
 ## 安装
 
