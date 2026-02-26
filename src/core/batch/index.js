@@ -143,7 +143,71 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function (files, targetDi
   return { success: true, stats: processingStats };
 });
 
+/**
+ * 递归扫描目录及所有子文件夹，按目录分组返回支持的文件
+ */
+function scanDirectoryRecursive(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    return { success: false, error: `Directory '${dirPath}' does not exist`, errorType: ErrorTypes.DIRECTORY_NOT_FOUND };
+  }
+
+  const groups = [];
+  const totalStats = { total: 0, heic: 0, livp: 0, png: 0, dng: 0, tiff: 0, jpg: 0 };
+
+  function walkDir(currentDir) {
+    let entries;
+    try {
+      entries = fs.readdirSync(currentDir);
+    } catch (e) {
+      return;
+    }
+
+    const supportedFiles = [];
+    const stats = { total: 0, heic: 0, livp: 0, png: 0, dng: 0, tiff: 0, jpg: 0 };
+    const subdirs = [];
+
+    for (const entry of entries) {
+      // 跳过 jpg 输出目录
+      if (entry === 'jpg') continue;
+
+      const fullPath = path.join(currentDir, entry);
+      const fstat = safeExecute(fs.statSync, [fullPath], () => null, null);
+      if (!fstat) continue;
+
+      if (fstat.isDirectory()) {
+        subdirs.push(fullPath);
+      } else if (fstat.isFile()) {
+        const detection = detectFileType(fullPath);
+        const converter = detection.type ? factory.getConverterByType(detection.type) : null;
+        if (converter) {
+          supportedFiles.push(fullPath);
+          stats[converter.type]++;
+          stats.total++;
+        }
+      }
+    }
+
+    if (supportedFiles.length > 0) {
+      groups.push({ dirPath: currentDir, files: supportedFiles, stats });
+      // 累加到总计
+      for (const key of Object.keys(totalStats)) {
+        totalStats[key] += stats[key];
+      }
+    }
+
+    // 递归处理子目录
+    for (const subdir of subdirs) {
+      walkDir(subdir);
+    }
+  }
+
+  walkDir(dirPath);
+
+  return { success: true, groups, totalStats };
+}
+
 module.exports = {
   scanDirectory,
+  scanDirectoryRecursive,
   batchProcessImages
 };

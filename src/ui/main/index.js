@@ -8,7 +8,7 @@ const Store = require('electron-store').default;
 
 const execAsync = promisify(exec);
 
-const { scanDirectory } = require('../../core/batch');
+const { scanDirectory, scanDirectoryRecursive } = require('../../core/batch');
 const { prepareOutputDirectory } = require('../../core/services/file-manager');
 const { ProgressReporter } = require('../../core/services/progress-reporter');
 
@@ -60,32 +60,39 @@ ipcMain.handle('process-directory', async (event, dirPath, userOptions = {}) => 
     store.set('quality', userOptions.quality);
     store.set('compressJpg', userOptions.compressJpg);
 
-    const scanResult = scanDirectory(dirPath);
+    const scanResult = scanDirectoryRecursive(dirPath);
     if (!scanResult.success) return scanResult;
 
-    if (scanResult.files.length === 0) {
+    if (scanResult.groups.length === 0) {
       return { success: false, error: 'No supported image files found.' };
     }
 
-    const outputDir = prepareOutputDirectory(null, dirPath, true);
+    // 为每个分组准备输出目录
+    const groups = scanResult.groups.map(group => {
+      const outputDir = prepareOutputDirectory(null, group.dirPath, true);
+      return {
+        dirPath: group.dirPath,
+        files: group.files,
+        stats: group.stats,
+        outputDir
+      };
+    });
 
     return new Promise((resolve, reject) => {
       const worker = new Worker(path.join(__dirname, 'conversion-worker.js'), {
         workerData: {
-          files: scanResult.files,
-          targetDirectory: dirPath,
+          groups,
+          rootDirectory: dirPath,
           options: {
-            outputDir,
             quality: userOptions.quality || 95,
             compressJpg: userOptions.compressJpg,
-            stats: scanResult.stats
           }
         }
       });
 
       worker.on('message', (message) => {
         event.sender.send('processing-log', message);
-        if (message.type === 'done') {
+        if (message.type === 'all-done') {
           resolve({ success: true, stats: message.stats });
           worker.terminate();
         }

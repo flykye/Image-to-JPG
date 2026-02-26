@@ -231,7 +231,7 @@ async function startBatchProcessing() {
 
   for (let i = 0; i < queuedFolders.length; i++) {
     const dirPath = queuedFolders[i];
-    currentProcessedDir = `${dirPath}/jpg`;
+    currentProcessedDir = dirPath;
 
     currentFolderStats = {
       folderPath: dirPath,
@@ -293,7 +293,7 @@ async function startBatchProcessing() {
 async function startProcessing(dirPath) {
   isProcessing = true;
 
-  currentProcessedDir = `${dirPath}/jpg`;
+  currentProcessedDir = dirPath;
 
   dropZone.classList.add('hidden');
   processingPanel.classList.remove('hidden');
@@ -331,24 +331,24 @@ async function startProcessing(dirPath) {
 function handleLogMessage(data) {
   switch (data.type) {
     case 'start':
-      heicCount.textContent = data.heicCount;
-      livpCount.textContent = data.livpCount;
-      pngCount.textContent = data.pngCount;
-      dngCount.textContent = data.dngCount || 0;
-      tiffCount.textContent = data.tiffCount || 0;
-      jpgCount.textContent = data.jpgCount;
+      // 累加各组的统计（多组处理时会收到多次 start）
+      heicCount.textContent = parseInt(heicCount.textContent || 0) + (data.heicCount || 0);
+      livpCount.textContent = parseInt(livpCount.textContent || 0) + (data.livpCount || 0);
+      pngCount.textContent = parseInt(pngCount.textContent || 0) + (data.pngCount || 0);
+      dngCount.textContent = parseInt(dngCount.textContent || 0) + (data.dngCount || 0);
+      tiffCount.textContent = parseInt(tiffCount.textContent || 0) + (data.tiffCount || 0);
+      jpgCount.textContent = parseInt(jpgCount.textContent || 0) + (data.jpgCount || 0);
 
       if (currentFolderStats) {
-        currentFolderStats.totalFiles = data.totalFiles;
-        currentFolderStats.heic = data.heicCount;
-        currentFolderStats.livp = data.livpCount;
-        currentFolderStats.png = data.pngCount;
-        currentFolderStats.dng = data.dngCount || 0;
-        currentFolderStats.tiff = data.tiffCount || 0;
-        currentFolderStats.jpg = data.jpgCount;
+        currentFolderStats.totalFiles += data.totalFiles;
+        currentFolderStats.heic += data.heicCount || 0;
+        currentFolderStats.livp += data.livpCount || 0;
+        currentFolderStats.png += data.pngCount || 0;
+        currentFolderStats.dng += data.dngCount || 0;
+        currentFolderStats.tiff += data.tiffCount || 0;
+        currentFolderStats.jpg += data.jpgCount || 0;
       }
 
-      addLogEntry('start', `开始处理...`);
       addLogEntry('info', `发现 ${data.totalFiles} 个文件待处理`);
       break;
 
@@ -386,7 +386,19 @@ function handleLogMessage(data) {
       addLogEntry('info', `  ${data.message}`);
       break;
 
+    case 'group-start':
+      addLogEntry('info', `📁 [${data.groupIndex + 1}/${data.groupCount}] 处理子文件夹: ${data.groupDirName}`);
+      break;
+
+    case 'group-done':
+      addLogEntry('info', `✅ 子文件夹处理完成: ${data.groupDirName}`);
+      break;
+
     case 'done':
+      // 单组完成（来自 batchProcessImages 的 progressReporter）
+      break;
+
+    case 'all-done':
       progressFill.style.width = '100%';
       progressText.textContent = '100%';
 
