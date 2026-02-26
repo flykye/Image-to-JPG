@@ -2,17 +2,21 @@ const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Worker } = require('worker_threads');
+const { exec } = require('child_process');
+const { promisify } = require('util');
 const Store = require('electron-store').default;
+
+const execAsync = promisify(exec);
 
 const { scanDirectory } = require('../../core/batch');
 const { prepareOutputDirectory } = require('../../core/services/file-manager');
 const { ProgressReporter } = require('../../core/services/progress-reporter');
 
 const store = new Store({
-    defaults: {
-        quality: 95,
-        compressJpg: true
-    }
+  defaults: {
+    quality: 95,
+    compressJpg: true
+  }
 });
 
 let mainWindow;
@@ -125,5 +129,27 @@ ipcMain.handle('get-settings', () => {
 
 ipcMain.handle('set-setting', (event, key, value) => {
   store.set(key, value);
+  return { success: true };
+});
+
+ipcMain.handle('check-imagemagick', async () => {
+  try {
+    await execAsync('magick -version');
+    return true;
+  } catch (error) {
+    try {
+      // Fallback for older ImageMagick versions (v6)
+      await execAsync('convert -version');
+      return true;
+    } catch (fallbackError) {
+      return false;
+    }
+  }
+});
+
+ipcMain.handle('open-external-url', (event, url) => {
+  if (url) {
+    shell.openExternal(url);
+  }
   return { success: true };
 });

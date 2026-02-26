@@ -34,6 +34,42 @@ body {
   flex-direction: column;
 }
 
+/* ImageMagick Warning */
+.im-warning {
+  margin: 10px 20px 0 20px;
+  background-color: rgba(204, 167, 0, 0.1);
+  border: 1px solid var(--warning);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--warning);
+  -webkit-app-region: no-drag;
+}
+
+.im-warning svg {
+  flex-shrink: 0;
+}
+
+.im-warning-text {
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.im-download-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.im-download-link:hover {
+  text-decoration: underline;
+}
+
 /* Drop Zone */
 .drop-zone {
   flex: 1;

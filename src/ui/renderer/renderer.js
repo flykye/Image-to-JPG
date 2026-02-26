@@ -27,6 +27,8 @@ const qualityRange = document.getElementById('qualityRange');
 const qualityValue = document.getElementById('qualityValue');
 const compressJpg = document.getElementById('compressJpg');
 const folderStatsList = document.getElementById('folderStatsList');
+const imagemagickWarning = document.getElementById('imagemagickWarning');
+const imDownloadLink = document.getElementById('imDownloadLink');
 
 let isProcessing = false;
 let unsubscribeLog = null;
@@ -66,6 +68,12 @@ openFolderBtn.addEventListener('click', () => {
   if (currentProcessedDir) {
     window.electronAPI.openDirectory(currentProcessedDir);
   }
+});
+
+// Handle ImageMagick download link click
+imDownloadLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  window.electronAPI.openExternalUrl('https://imagemagick.org/script/download.php');
 });
 
 // Prevent default drag behaviors
@@ -317,7 +325,7 @@ function handleLogMessage(data) {
       dngCount.textContent = data.dngCount || 0;
       tiffCount.textContent = data.tiffCount || 0;
       jpgCount.textContent = data.jpgCount;
-      
+
       if (currentFolderStats) {
         currentFolderStats.totalFiles = data.totalFiles;
         currentFolderStats.heic = data.heicCount;
@@ -327,7 +335,7 @@ function handleLogMessage(data) {
         currentFolderStats.tiff = data.tiffCount || 0;
         currentFolderStats.jpg = data.jpgCount;
       }
-      
+
       addLogEntry('start', `开始处理...`);
       addLogEntry('info', `发现 ${data.totalFiles} 个文件待处理`);
       break;
@@ -369,7 +377,7 @@ function handleLogMessage(data) {
     case 'done':
       progressFill.style.width = '100%';
       progressText.textContent = '100%';
-      
+
       if (currentFolderStats) {
         currentFolderStats.duration = ((Date.now() - currentFolderStats.startTime) / 1000).toFixed(1);
       }
@@ -395,21 +403,21 @@ function renderFolderStatsSummary() {
   summaryContainer.classList.remove('hidden');
 
   folderStatsList.innerHTML = '';
-  
+
   let totalFiles = 0;
   let totalSuccess = 0;
   let totalFailed = 0;
   let totalDuration = 0;
-  
+
   folderStats.forEach((stat, index) => {
     totalFiles += stat.totalFiles;
     totalSuccess += stat.successfulConversions;
     totalFailed += stat.failedConversions;
     totalDuration += parseFloat(stat.duration);
-    
+
     const hasErrors = stat.failedConversions > 0;
     const allSuccess = stat.failedConversions === 0 && stat.successfulConversions > 0;
-    
+
     const item = document.createElement('div');
     item.className = 'folder-stats-item';
     item.innerHTML = `
@@ -491,4 +499,15 @@ async function loadSettings() {
   }
 }
 
+// Check system dependencies (ImageMagick)
+async function checkSystemDependencies() {
+  const hasIM = await window.electronAPI.checkImageMagick();
+  if (!hasIM) {
+    imagemagickWarning.classList.remove('hidden');
+  } else {
+    imagemagickWarning.classList.add('hidden');
+  }
+}
+
 loadSettings();
+checkSystemDependencies();

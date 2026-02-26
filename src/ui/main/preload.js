@@ -16,7 +16,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('processing-log', subscription);
   },
 
-  // Settings persistence (NEW)
+  // Settings persistence
   getSettings: () => ipcRenderer.invoke('get-settings'),
-  setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value)
+  setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value),
+
+  // System Utilities
+  checkImageMagick: () => ipcRenderer.invoke('check-imagemagick'),
+  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url)
 });
