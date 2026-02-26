@@ -5,7 +5,7 @@
 - `src/ui/renderer/`: Renderer UI (`index.html`, `renderer.js`, `styles.css`).
 - `src/core/converters/`: Format-specific conversion logic (HEIC, LIVP, DNG, TIFF, JPG).
 - `src/core/services/`: Shared services (file management, progress reporting, error handling, file-signature detection).
-- `src/core/batch/`: Batch orchestration used by conversion flows.
+- `src/core/batch/`: Batch orchestration used by conversion flows; supports recursive subdirectory scanning (`scanDirectoryRecursive`).
 - `src/cli/index.js`: CLI entry point (`batch-image-processor`).
 - `src/assets/`: App icons and packaged static assets.
 - `testdng/`: Sample input/output fixtures for manual conversion checks.
@@ -14,6 +14,7 @@
 ## Build, Test, and Development Commands
 - `npm start`: Launch the Electron GUI locally.
 - `npm run cli -- <dir>`: Run CLI conversion against a target folder.
+- `npm run cli -- <dir> -r`: Run CLI conversion recursively (each subfolder gets its own `jpg/` output).
 - `npm test`: Run Jest test suite.
 - `npm run test:watch`: Run tests in watch mode.
 - `npm run test:coverage`: Generate coverage report.
