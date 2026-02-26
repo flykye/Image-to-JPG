@@ -134,21 +134,33 @@ async function handleDrop(e) {
   const files = e.dataTransfer.files;
   if (files.length === 0) return;
 
-  const file = files[0];
-  const filePath = window.electronAPI.getPathForFile(file);
+  let addedCount = 0;
+  let hasError = false;
 
-  if (!filePath) {
-    showError('无法获取文件路径');
-    return;
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const filePath = window.electronAPI.getPathForFile(file);
+
+    if (!filePath) {
+      hasError = true;
+      continue;
+    }
+
+    const result = await window.electronAPI.validateDirectory(filePath);
+    if (result.success && result.isDirectory) {
+      addFolderToQueue(filePath);
+      addedCount++;
+    } else {
+      hasError = true;
+    }
   }
 
-  const result = await window.electronAPI.validateDirectory(filePath);
-  if (!result.success || !result.isDirectory) {
-    showError('请拖入文件夹，而不是文件');
-    return;
+  if (addedCount === 0 && hasError) {
+    showError('请拖入有效的文件夹，而不是文件');
+  } else if (hasError) {
+    // Optional: show a warning if only some items were invalid
+    // addLogEntry('warning', '部分拖入的内容不是有效的文件夹，已被忽略');
   }
-
-  addFolderToQueue(filePath);
 }
 
 function addFolderToQueue(dirPath) {
