@@ -39,6 +39,14 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // 确保 Homebrew 等路径在 PATH 中（macOS GUI 应用默认不包含）
+  const homebrewPaths = ['/opt/homebrew/bin', '/usr/local/bin'];
+  const currentPath = process.env.PATH || '';
+  const newPath = homebrewPaths.filter(p => !currentPath.split(':').includes(p)).join(':');
+  if (newPath) {
+    process.env.PATH = newPath + ':' + currentPath;
+  }
+
   createWindow();
 
   app.on('activate', () => {
@@ -140,18 +148,20 @@ ipcMain.handle('set-setting', (event, key, value) => {
 });
 
 ipcMain.handle('check-imagemagick', async () => {
-  try {
-    await execAsync('magick -version');
-    return true;
-  } catch (error) {
+  // 先尝试系统PATH中的命令
+  const commands = ['magick -version', 'convert -version'];
+  // 再尝试完整路径（macOS Homebrew 安装路径）
+  const fullPaths = ['/opt/homebrew/bin/magick -version', '/usr/local/bin/magick -version'];
+
+  for (const cmd of [...commands, ...fullPaths]) {
     try {
-      // Fallback for older ImageMagick versions (v6)
-      await execAsync('convert -version');
+      await execAsync(cmd, { timeout: 5000 });
       return true;
-    } catch (fallbackError) {
-      return false;
+    } catch (error) {
+      // 继续尝试下一个
     }
   }
+  return false;
 });
 
 ipcMain.handle('open-external-url', (event, url) => {
