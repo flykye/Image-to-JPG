@@ -37,6 +37,11 @@ function scanDirectory(dirPath) {
 
 function getExpectedOutputPath(filePath, type, outputDir) {
   const baseName = path.basename(filePath, path.extname(filePath));
+  const ext = path.extname(filePath).toLowerCase();
+  // 当检测到的类型是 jpg，但原始扩展名不是 jpg/jpeg 时，需要修正扩展名
+  if (type === 'jpg' && ext !== '.jpg' && ext !== '.jpeg') {
+    return path.join(outputDir, `${baseName}.jpg`);
+  }
   if (type === 'jpg') {
     return path.join(outputDir, path.basename(filePath));
   }

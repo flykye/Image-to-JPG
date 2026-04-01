@@ -12,7 +12,12 @@ class JpgConverter extends ImageConverter {
   get type() { return 'jpg'; }
 
   async convert(filePath, outputDir, options) {
-    const filename = path.basename(filePath);
+    const originalFilename = path.basename(filePath);
+    const ext = path.extname(originalFilename).toLowerCase();
+    // 当扩展名不是 jpg/jpeg 时，修正为正确的 jpg 扩展名
+    const filename = (ext !== '.jpg' && ext !== '.jpeg')
+      ? `${path.basename(filePath, ext)}.jpg`
+      : originalFilename;
     const targetPath = path.join(outputDir, filename);
 
     if (options.compressJpg) {

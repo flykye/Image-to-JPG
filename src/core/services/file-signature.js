@@ -30,14 +30,14 @@ function detectHeaderType(buffer) {
 
   // PNG signature
   if (buffer.length >= 8 &&
-      buffer[0] === 0x89 &&
-      buffer[1] === 0x50 &&
-      buffer[2] === 0x4E &&
-      buffer[3] === 0x47 &&
-      buffer[4] === 0x0D &&
-      buffer[5] === 0x0A &&
-      buffer[6] === 0x1A &&
-      buffer[7] === 0x0A) {
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4E &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0D &&
+    buffer[5] === 0x0A &&
+    buffer[6] === 0x1A &&
+    buffer[7] === 0x0A) {
     return 'png';
   }
 
@@ -67,7 +67,7 @@ function detectHeaderType(buffer) {
 
   // TIFF signature (used by DNG)
   if ((buffer[0] === 0x49 && buffer[1] === 0x49 && buffer[2] === 0x2A && buffer[3] === 0x00) ||
-      (buffer[0] === 0x4D && buffer[1] === 0x4D && buffer[2] === 0x00 && buffer[3] === 0x2A)) {
+    (buffer[0] === 0x4D && buffer[1] === 0x4D && buffer[2] === 0x00 && buffer[3] === 0x2A)) {
     const ascii = buffer.toString('ascii');
     if (ascii.toUpperCase().includes('DNG')) {
       return 'dng';
