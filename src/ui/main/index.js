@@ -4,7 +4,7 @@ const fs = require('fs');
 const { Worker } = require('worker_threads');
 const { exec } = require('child_process');
 const { promisify } = require('util');
-const Store = require('electron-store').default;
+const Store = require('electron-store').default || require('electron-store');
 
 const execAsync = promisify(exec);
 
@@ -14,7 +14,7 @@ const { ProgressReporter } = require('../../core/services/progress-reporter');
 
 const store = new Store({
   defaults: {
-    quality: 95,
+    quality: 90,
     compressJpg: true
   }
 });
@@ -39,12 +39,13 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  // 确保 Homebrew 等路径在 PATH 中（macOS GUI 应用默认不包含）
-  const homebrewPaths = ['/opt/homebrew/bin', '/usr/local/bin'];
+  // 确保常见工具路径在 PATH 中（macOS GUI 应用默认不包含）
+  const commonPaths = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
   const currentPath = process.env.PATH || '';
-  const newPath = homebrewPaths.filter(p => !currentPath.split(':').includes(p)).join(':');
-  if (newPath) {
-    process.env.PATH = newPath + ':' + currentPath;
+  const currentDirs = currentPath.split(':').filter(Boolean);
+  const missingPaths = commonPaths.filter(p => !currentDirs.includes(p));
+  if (missingPaths.length > 0) {
+    process.env.PATH = missingPaths.join(':') + ':' + currentPath;
   }
 
   createWindow();
@@ -86,6 +87,7 @@ ipcMain.handle('process-directory', async (event, dirPath, userOptions = {}) => 
       };
     });
 
+    let settled = false;
     return new Promise((resolve, reject) => {
       const worker = new Worker(path.join(__dirname, 'conversion-worker.js'), {
         workerData: {
@@ -101,14 +103,25 @@ ipcMain.handle('process-directory', async (event, dirPath, userOptions = {}) => 
       worker.on('message', (message) => {
         event.sender.send('processing-log', message);
         if (message.type === 'all-done') {
-          resolve({ success: true, stats: message.stats });
+          if (!settled) {
+            settled = true;
+            resolve({ success: true, stats: message.stats });
+          }
           worker.terminate();
         }
       });
 
-      worker.on('error', reject);
+      worker.on('error', (err) => {
+        if (!settled) {
+          settled = true;
+          reject(err);
+        }
+      });
       worker.on('exit', (code) => {
-        if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
+        if (code !== 0 && !settled) {
+          settled = true;
+          reject(new Error(`Worker stopped with exit code ${code}`));
+        }
       });
     });
   } catch (error) {
@@ -148,17 +161,21 @@ ipcMain.handle('set-setting', (event, key, value) => {
 });
 
 ipcMain.handle('check-imagemagick', async () => {
-  // 先尝试系统PATH中的命令
+  // 优先通过 which 动态查找，再尝试完整路径
   const commands = ['magick -version', 'convert -version'];
-  // 再尝试完整路径（macOS Homebrew 安装路径）
-  const fullPaths = ['/opt/homebrew/bin/magick -version', '/usr/local/bin/magick -version'];
+  const fullPaths = [
+    '/opt/homebrew/bin/magick -version',
+    '/usr/local/bin/magick -version',
+    '/opt/homebrew/bin/convert -version',
+    '/usr/local/bin/convert -version'
+  ];
 
   for (const cmd of [...commands, ...fullPaths]) {
     try {
       await execAsync(cmd, { timeout: 5000 });
       return true;
-    } catch (error) {
-      // 继续尝试下一个
+    } catch {
+      // continue to next
     }
   }
   return false;

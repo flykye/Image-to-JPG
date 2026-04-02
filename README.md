@@ -54,9 +54,10 @@ npm run build:win
 - **性能优化**: 可选的积极内存清理模式 (`--memory-cleanup`)。
 
 ### 技术亮点
-- **双转换引擎**: 优先使用sharp库进行HEIC转换，自动回退到内置的 Wasm 解码器，并最终回退到 ImageMagick (CLI)。
+- **双转换引擎**: HEIC转换采用智能降级链：Sharp（最快原生方案）→ Wasm内置解码器 → ImageMagick（外部工具兜底）。DNG 转换优先 Sharp，自动降级到 ImageMagick。
 - **模块化架构**: 清晰的模块划分，便于维护和扩展。
 - **详细日志**: 支持verbose模式，提供详细的处理信息。
+- **完整测试**: Jest 单元测试覆盖 error-handler、file-signature、converters、batch、conversion-helpers 等核心模块。
 
 ## 架构与模块
 
@@ -89,11 +90,13 @@ Image to JPG/
 │   │   │   ├── file-manager.js    # 文件管理
 │   │   │   ├── file-signature.js  # 文件头识别
 │   │   │   ├── progress-reporter.js # 进度报告
-│   │   │   └── error-handler.js   # 错误处理
+│   │   │   ├── error-handler.js   # 错误处理
+│   │   │   └── conversion-helpers.js # 转换辅助函数
 │   │   └── batch/
 │   │       └── index.js          # 批处理编排
 │   └── cli/
 │       └── index.js              # CLI入口
+├── __tests__/                    # Jest 单元测试 (66 个测试用例)
 ├── testimage/                    # 测试用图片文件
 ├── assets/                       # 应用图标
 ├── package.json
@@ -122,6 +125,7 @@ Image to JPG/
 - `file-signature.js`: 文件头(magic number)识别真实格式
 - `progress-reporter.js`: 实时进度显示和统计
 - `error-handler.js`: 错误分类、安全执行包装器
+- `conversion-helpers.js`: 输入/输出验证、ImageMagick 可用性检测
 
 #### src/core/batch/ - 批处理
 负责目录扫描（支持递归子文件夹扫描）、文件分类、批量处理流程编排、并发控制。
@@ -271,7 +275,7 @@ Processing file 1/10: vacation.heic
 
 **解决方案**:
 - 确保sharp库正确安装
-- 如果sharp不支持HEIC，程序会自动回退到内置的 Wasm 解码器。若仍失败，安装 ImageMagick 作为最终备选方案（仅限 CLI 模式）：
+- 程序会按以下顺序自动降级：Sharp → Wasm解码器 → ImageMagick。若 Sharp 和 Wasm 均失败，安装 ImageMagick 作为最终备选方案：
   ```bash
   # macOS
   brew install imagemagick
@@ -376,7 +380,19 @@ ISC
 
 ## 更新日志
 
-### Version 1.2.0
+### Version 1.3.0
+- **优化**: 修正 HEIC 转换降级链为 Sharp → Wasm → ImageMagick（与文档一致）
+- **修复**: DNG 转换降级逻辑 ImageMagick 失败时的死代码问题
+- **修复**: Worker 线程双重 reject 导致未处理异常的问题
+- **修复**: GUI 处理多文件夹时进度条重置的体验问题
+- **优化**: 批处理中同步 I/O 改为异步，避免阻塞事件循环
+- **修复**: LIVP ZIP 文件头检测的死代码路径，现在通过 `TYPE_ALIAS_MAP` 正确路由
+- **优化**: ImageMagick 路径检测扩展至更多标准路径
+- **优化**: 删除重复的 `categorizeError` 实现，统一使用 `error-handler.js`
+- **删除**: renderer.js 中未使用的 `startProcessing` 死代码
+- **测试**: 新增 66 个 Jest 单元测试，覆盖核心模块
+
+### Version 1.2.0 (Previous)
 - **新功能**: 支持递归扫描子文件夹
   - GUI 自动递归处理所有子目录，每个子文件夹在自身目录下生成独立的 `jpg/` 输出目录
   - CLI 新增 `-r, --recursive` 选项

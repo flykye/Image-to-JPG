@@ -1,9 +1,10 @@
-const path = require('path');
 const { ImageConverter } = require('./base');
 
-/**
- * 转换器工厂
- */
+// 类型别名映射：文件签名检测到的类型 -> 实际转换器类型（必须在 ConverterFactory 之前定义）
+const TYPE_ALIAS_MAP = {
+  zip: 'livp'  // ZIP 文件头（LIVP）映射到 livp 转换器
+};
+
 class ConverterFactory {
   constructor() {
     this.converters = [];
@@ -14,7 +15,9 @@ class ConverterFactory {
   }
 
   getConverterByType(type) {
-    return this.converters.find(c => c.type === type);
+    // 先直接查找，找不到则通过类型别名映射查找
+    const resolved = TYPE_ALIAS_MAP[type] || type;
+    return this.converters.find(c => c.type === resolved);
   }
 
   getConverter(filePath) {
@@ -38,13 +41,27 @@ class ConverterFactory {
   }
 
   getSupportedExtensions() {
-    return ['.heic', '.livp', '.png', '.dng', '.tif', '.tiff', '.jpg', '.jpeg'];
+    const extMap = {
+      heic: '.heic',
+      livp: '.livp',
+      png: '.png',
+      dng: '.dng',
+      tiff: '.tif',
+      jpg: '.jpg'
+    };
+    const exts = new Set();
+    for (const converter of this.converters) {
+      const ext = extMap[converter.type];
+      if (ext) exts.add(ext);
+      if (converter.type === 'tiff') exts.add('.tiff');
+      if (converter.type === 'jpg') exts.add('.jpeg');
+    }
+    return Array.from(exts);
   }
 }
 
 const factory = new ConverterFactory();
 
-// 注册转换器
 const { HeicConverter, PngConverter, DngConverter, TiffConverter } = require('./image-converters');
 const { LivpConverter } = require('./livp-converter');
 const { JpgConverter } = require('./jpg-converter');

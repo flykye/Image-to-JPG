@@ -1,7 +1,9 @@
 const { ImageConverter } = require('./base');
 const fs = require('fs');
+const fsPromises = require('fs').promises;
 const path = require('path');
 const sharp = require('sharp');
+const { copyToJpgDirectory } = require('../services/file-manager');
 
 class JpgConverter extends ImageConverter {
   supports(filePath) {
@@ -14,20 +16,19 @@ class JpgConverter extends ImageConverter {
   async convert(filePath, outputDir, options) {
     const originalFilename = path.basename(filePath);
     const ext = path.extname(originalFilename).toLowerCase();
-    // 当扩展名不是 jpg/jpeg 时，修正为正确的 jpg 扩展名
     const filename = (ext !== '.jpg' && ext !== '.jpeg')
       ? `${path.basename(filePath, ext)}.jpg`
       : originalFilename;
     const targetPath = path.join(outputDir, filename);
 
     if (options.compressJpg) {
-      const stats = fs.statSync(filePath);
+      const stats = await fsPromises.stat(filePath);
       await sharp(filePath)
-        .withMetadata()  // 保留原始图片的DPI和EXIF元数据
-        .jpeg({ quality: options.quality || 95 })
+        .withMetadata()
+        .jpeg({ quality: options.quality || 90 })
         .toFile(targetPath);
 
-      const outputStats = fs.statSync(targetPath);
+      const outputStats = await fsPromises.stat(targetPath);
 
       return {
         success: true,
@@ -43,10 +44,8 @@ class JpgConverter extends ImageConverter {
         }
       };
     } else {
-      const { copyToJpgDirectory } = require('../services/file-manager');
       const copyResult = copyToJpgDirectory(filePath, filename, outputDir);
 
-      // 如果复制失败，返回失败结果
       if (!copyResult.success) {
         return {
           success: false,
@@ -58,7 +57,7 @@ class JpgConverter extends ImageConverter {
       return {
         success: true,
         filename,
-        outputPath: copyResult.targetPath,  // 映射targetPath到outputPath
+        outputPath: copyResult.targetPath,
         type: 'jpg',
         details: {
           converted: false,

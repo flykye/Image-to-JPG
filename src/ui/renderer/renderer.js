@@ -36,6 +36,8 @@ let currentProcessedDir = '';
 let queuedFolders = [];
 let folderStats = [];
 let currentFolderStats = null;
+let totalGlobalFiles = 0;       // 所有文件夹的文件总数（用于全局进度）
+let processedGlobalFiles = 0;   // 已处理的全局文件数
 
 /**
  * Helper function to format bytes into readable string (e.g., 1.2 MB)
@@ -65,7 +67,11 @@ compressJpg.addEventListener('change', (e) => {
 
 // Handle 'Open Folder' button click
 openFolderBtn.addEventListener('click', () => {
-  if (currentProcessedDir) {
+  // 优先打开第一个已处理的输出目录
+  const firstOutputDir = folderStats[0]?.outputDir;
+  if (firstOutputDir) {
+    window.electronAPI.openDirectory(firstOutputDir);
+  } else if (currentProcessedDir) {
     window.electronAPI.openDirectory(currentProcessedDir);
   }
 });
@@ -203,6 +209,13 @@ folderList.addEventListener('click', (e) => {
   }
 });
 
+folderStatsList.addEventListener('click', (e) => {
+  const btn = e.target.closest('.open-folder-btn');
+  if (btn) {
+    window.electronAPI.openDirectory(btn.dataset.outputDir);
+  }
+});
+
 startProcessingBtn.addEventListener('click', startBatchProcessing);
 
 async function startBatchProcessing() {
@@ -229,6 +242,10 @@ async function startBatchProcessing() {
 
   unsubscribeLog = window.electronAPI.onProcessingLog(handleLogMessage);
 
+  // 初始化全局进度计数器
+  totalGlobalFiles = 0;
+  processedGlobalFiles = 0;
+
   for (let i = 0; i < queuedFolders.length; i++) {
     const dirPath = queuedFolders[i];
     currentProcessedDir = dirPath;
@@ -236,6 +253,7 @@ async function startBatchProcessing() {
     currentFolderStats = {
       folderPath: dirPath,
       folderName: dirPath.split(/[/\\]/).pop(),
+      outputDir: dirPath + (dirPath.includes('/') ? '/' : '\\') + 'jpg',
       totalFiles: 0,
       successfulConversions: 0,
       failedConversions: 0,
@@ -290,48 +308,11 @@ async function startBatchProcessing() {
   addLogEntry('info', '所有文件夹处理完成！');
 }
 
-async function startProcessing(dirPath) {
-  isProcessing = true;
-
-  currentProcessedDir = dirPath;
-
-  dropZone.classList.add('hidden');
-  processingPanel.classList.remove('hidden');
-  summaryContainer.classList.add('hidden');
-
-  progressFill.style.width = '0%';
-  progressText.textContent = '0%';
-  heicCount.textContent = '0';
-  livpCount.textContent = '0';
-  pngCount.textContent = '0'; dngCount.textContent = '0';
-  jpgCount.textContent = '0';
-  logOutput.innerHTML = '';
-
-  unsubscribeLog = window.electronAPI.onProcessingLog(handleLogMessage);
-
-  try {
-    const options = {
-      quality: parseInt(qualityRange.value),
-      compressJpg: compressJpg.checked
-    };
-    const result = await window.electronAPI.processDirectory(dirPath, options);
-
-    if (!result.success) {
-      addLogEntry('error', `错误: ${result.error}`);
-      showSummary(false, { error: result.error });
-    }
-  } catch (error) {
-    addLogEntry('error', `错误: ${error.message}`);
-    showSummary(false, { error: error.message });
-  }
-
-  isProcessing = false;
-}
-
 function handleLogMessage(data) {
   switch (data.type) {
     case 'start':
       // 累加各组的统计（多组处理时会收到多次 start）
+      totalGlobalFiles += data.totalFiles;
       heicCount.textContent = parseInt(heicCount.textContent || 0) + (data.heicCount || 0);
       livpCount.textContent = parseInt(livpCount.textContent || 0) + (data.livpCount || 0);
       pngCount.textContent = parseInt(pngCount.textContent || 0) + (data.pngCount || 0);
@@ -353,14 +334,18 @@ function handleLogMessage(data) {
       break;
 
     case 'processing':
-      progressFill.style.width = `${data.progress}%`;
-      progressText.textContent = `${data.progress}%`;
       addLogEntry('processing', `[${data.current}/${data.total}] 正在处理 ${data.fileType.toUpperCase()}: ${data.filename}`);
       break;
 
     case 'success':
       if (currentFolderStats) {
         currentFolderStats.successfulConversions++;
+      }
+      processedGlobalFiles++;
+      if (totalGlobalFiles > 0) {
+        const globalProgress = Math.round((processedGlobalFiles / totalGlobalFiles) * 100);
+        progressFill.style.width = `${globalProgress}%`;
+        progressText.textContent = `${globalProgress}%`;
       }
       let msg = `  完成: ${data.filename} → ${data.outputFilename}`;
       if (data.details && data.details.compressionRatio) {
@@ -374,6 +359,12 @@ function handleLogMessage(data) {
     case 'error':
       if (currentFolderStats) {
         currentFolderStats.failedConversions++;
+      }
+      processedGlobalFiles++;
+      if (totalGlobalFiles > 0) {
+        const globalProgress = Math.round((processedGlobalFiles / totalGlobalFiles) * 100);
+        progressFill.style.width = `${globalProgress}%`;
+        progressText.textContent = `${globalProgress}%`;
       }
       addLogEntry('error', `  失败: ${data.filename} - ${data.error}`);
       break;
@@ -450,6 +441,7 @@ function renderFolderStatsSummary() {
         <span class="folder-stats-badge ${hasErrors ? 'error' : allSuccess ? '' : 'warning'}">
           ${hasErrors ? `${stat.failedConversions} 失败` : allSuccess ? '完成' : '完成'}
         </span>
+        <button class="open-folder-btn" data-output-dir="${stat.outputDir}" title="打开输出文件夹">📂 打开</button>
       </div>
       <div class="folder-stats-types">
         ${stat.heic > 0 ? `<span>HEIC <b class="count">${stat.heic}</b></span>` : ''}

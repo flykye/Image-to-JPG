@@ -24,7 +24,7 @@ program
   .option('-s, --skip-existing', 'Skip processing files that already have JPG versions')
   .option('-o, --output-dir <path>', 'Custom output directory')
   .option('-c, --concurrency <number>', 'Number of files to process concurrently', (value) => parsePositiveInteger(value, 1), 1)
-  .option('-q, --quality <number>', 'JPG output quality (1-100)', parseInt, 95)
+  .option('-q, --quality <number>', 'JPG output quality (1-100)', parseInt, 90)
   .option('--compress-jpg', 'Compress existing JPG files')
   .action(async (directory, options) => {
     if (!directory) {

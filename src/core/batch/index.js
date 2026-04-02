@@ -1,4 +1,5 @@
 const fs = require('fs');
+const fsPromises = require('fs').promises;
 const path = require('path');
 const { factory } = require('../converters');
 const { prepareOutputDirectory } = require('../services/file-manager');
@@ -38,7 +39,6 @@ function scanDirectory(dirPath) {
 function getExpectedOutputPath(filePath, type, outputDir) {
   const baseName = path.basename(filePath, path.extname(filePath));
   const ext = path.extname(filePath).toLowerCase();
-  // 当检测到的类型是 jpg，但原始扩展名不是 jpg/jpeg 时，需要修正扩展名
   if (type === 'jpg' && ext !== '.jpg' && ext !== '.jpeg') {
     return path.join(outputDir, `${baseName}.jpg`);
   }
@@ -51,14 +51,38 @@ function getExpectedOutputPath(filePath, type, outputDir) {
 async function runWithConcurrency(items, concurrency, handler) {
   const limit = Math.max(1, concurrency || 1);
   let index = 0;
-  const workers = new Array(limit).fill(null).map(async () => {
-    while (true) {
-      const currentIndex = index++;
-      if (currentIndex >= items.length) break;
-      await handler(items[currentIndex], currentIndex);
+  let active = 0;
+
+  return new Promise((resolve) => {
+    function launchWorker() {
+      while (active < limit && index < items.length) {
+        const currentIndex = index++;
+        const currentActive = ++active;
+        handler(items[currentIndex], currentIndex)
+          .then(() => {
+            active--;
+            if (index < items.length) {
+              launchWorker();
+            } else if (active === 0) {
+              resolve();
+            }
+          })
+          .catch(() => {
+            active--;
+            if (index < items.length) {
+              launchWorker();
+            } else if (active === 0) {
+              resolve();
+            }
+          });
+      }
+      if (index >= items.length && active === 0) {
+        resolve();
+      }
     }
+
+    launchWorker();
   });
-  await Promise.all(workers);
 }
 
 /**
@@ -105,7 +129,9 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function (files, targetDi
     try {
       if (options.skipExisting) {
         const expectedOutputPath = getExpectedOutputPath(filePath, converter.type, outputDir);
-        if (fs.existsSync(expectedOutputPath)) {
+        try {
+          await fsPromises.access(expectedOutputPath, fs.constants.F_OK);
+          // File exists, skip conversion
           processingStats.successfulConversions++;
           progressReporter.logSuccess(filename, expectedOutputPath, converter.type, {
             converted: false,
@@ -113,6 +139,8 @@ const batchProcessImages = wrapAsyncWithTryCatch(async function (files, targetDi
             skipped: true
           });
           return;
+        } catch {
+          // File does not exist, proceed with conversion
         }
       }
 
@@ -172,7 +200,6 @@ function scanDirectoryRecursive(dirPath) {
     const subdirs = [];
 
     for (const entry of entries) {
-      // 跳过 jpg 输出目录
       if (entry === 'jpg') continue;
 
       const fullPath = path.join(currentDir, entry);
@@ -194,13 +221,11 @@ function scanDirectoryRecursive(dirPath) {
 
     if (supportedFiles.length > 0) {
       groups.push({ dirPath: currentDir, files: supportedFiles, stats });
-      // 累加到总计
       for (const key of Object.keys(totalStats)) {
         totalStats[key] += stats[key];
       }
     }
 
-    // 递归处理子目录
     for (const subdir of subdirs) {
       walkDir(subdir);
     }

@@ -1,5 +1,5 @@
 const { ImageConverter } = require('./base');
-const path = require('path');
+const { extractImageFromLivp } = require('./livp-logic');
 
 class LivpConverter extends ImageConverter {
   supports(filePath) {
@@ -9,7 +9,6 @@ class LivpConverter extends ImageConverter {
   get type() { return 'livp'; }
 
   async convert(filePath, outputDir, options) {
-    const { extractImageFromLivp } = require('./livp-logic');
     return await extractImageFromLivp(filePath, outputDir, options);
   }
 }
