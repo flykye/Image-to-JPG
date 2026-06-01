@@ -2,3 +2,5 @@ node_modules/
 dist/
 testdng
 testimage
+.DS_Store
+.claude/

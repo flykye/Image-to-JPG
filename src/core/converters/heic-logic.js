@@ -11,6 +11,7 @@ const {
   validateInputFile,
   prepareOutputPath,
   validateOutputFile,
+  getImageMagickCommand,
   isImageMagickAvailable
 } = require('../services/conversion-helpers');
 const { categorizeError } = require('../services/error-handler');
@@ -102,9 +103,9 @@ async function convertHeicWithImageMagick(inputPath, outputPath, options = {}) {
   }
 
   try {
-    const { execSync } = require('child_process');
-    const command = `magick "${inputPath}" -quality ${quality} "${outputPath}"`;
-    execSync(command, { timeout: 60000 });
+    const { execFileSync } = require('child_process');
+    const cmd = await getImageMagickCommand() || 'magick';
+    execFileSync(cmd, [inputPath, '-quality', String(quality), outputPath], { timeout: 60000 });
 
     const result = validateOutputFile(outputPath, validation.stats);
     if (!result.valid) {

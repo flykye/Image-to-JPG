@@ -110,35 +110,53 @@ function validateOutputFile(outputPath, inputStats) {
   };
 }
 
+let cachedImageMagickCmd = null;
+
+/**
+ * 动态探测可用的 ImageMagick 命令或绝对路径（带缓存）
+ * @returns {Promise<string|null>}
+ */
+async function getImageMagickCommand() {
+  if (cachedImageMagickCmd !== null) {
+    return cachedImageMagickCmd || null;
+  }
+
+  const commands = [
+    { name: 'magick', cmd: 'magick -version', timeout: 3000 },
+    { name: 'convert', cmd: 'convert -version', timeout: 3000 },
+    { name: '/opt/homebrew/bin/magick', cmd: '/opt/homebrew/bin/magick -version', timeout: 3000 },
+    { name: '/usr/local/bin/magick', cmd: '/usr/local/bin/magick -version', timeout: 3000 },
+    { name: '/opt/homebrew/bin/convert', cmd: '/opt/homebrew/bin/convert -version', timeout: 3000 },
+    { name: '/usr/local/bin/convert', cmd: '/usr/local/bin/convert -version', timeout: 3000 }
+  ];
+
+  for (const { name, cmd, timeout } of commands) {
+    try {
+      await execAsync(cmd, { timeout });
+      cachedImageMagickCmd = name;
+      return cachedImageMagickCmd;
+    } catch {
+      // continue
+    }
+  }
+
+  cachedImageMagickCmd = '';
+  return null;
+}
+
 /**
  * 检查 ImageMagick 是否可用
  * @returns {Promise<boolean>}
  */
 async function isImageMagickAvailable() {
-  // 优先通过 which 动态查找，再尝试完整路径
-  const commands = [
-    { cmd: 'magick -version', timeout: 5000 },
-    { cmd: 'convert -version', timeout: 5000 },
-    { cmd: '/opt/homebrew/bin/magick -version', timeout: 5000 },
-    { cmd: '/usr/local/bin/magick -version', timeout: 5000 },
-    { cmd: '/opt/homebrew/bin/convert -version', timeout: 5000 },
-    { cmd: '/usr/local/bin/convert -version', timeout: 5000 }
-  ];
-
-  for (const { cmd, timeout } of commands) {
-    try {
-      await execAsync(cmd, { timeout });
-      return true;
-    } catch {
-      // continue to next
-    }
-  }
-  return false;
+  const cmd = await getImageMagickCommand();
+  return !!cmd;
 }
 
 module.exports = {
   validateInputFile,
   prepareOutputPath,
   validateOutputFile,
+  getImageMagickCommand,
   isImageMagickAvailable
 };
