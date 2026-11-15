@@ -5,8 +5,6 @@
 const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
-const heicConvert = require('heic-convert');
-const { wrapAsyncWithTryCatch } = require('../services/error-handler');
 const {
   validateInputFile,
   prepareOutputPath,
@@ -21,51 +19,78 @@ const { categorizeError } = require('../services/error-handler');
  */
 function isHeicSupported() {
   try {
-    const formats = sharp.format;
-    return !!(formats.heif && formats.heif.input && formats.heif.input.buffer);
+    const input = sharp.format.heif?.input;
+    // The prebuilt libvips can read AVIF/HEIF containers without a HEVC decoder.
+    // Prefer its advertised extensions; older/custom builds still get a try.
+    return (
+      !!input?.buffer &&
+      (!Array.isArray(input.fileSuffix) ||
+        input.fileSuffix.some((suffix) => ['.heic', '.heif'].includes(suffix.toLowerCase())))
+    );
   } catch {
     return false;
   }
 }
 
 /**
- * 使用内置 heic-convert (Wasm) 将 HEIC 转换为 JPG
+ * 使用内置 Wasm 解码原始像素，再由 sharp 原生编码一次 JPG
  */
 async function convertHeicBuiltIn(inputPath, outputPath, options = {}) {
   const { quality = 90 } = options;
 
   const validation = validateInputFile(inputPath);
   if (!validation.valid) {
-    return { success: false, inputPath, outputPath, error: validation.error.message, method: 'builtin' };
+    return {
+      success: false,
+      inputPath,
+      outputPath,
+      error: validation.error.message,
+      method: 'builtin'
+    };
   }
 
   const outputValidation = prepareOutputPath(outputPath);
   if (!outputValidation.valid) {
-    return { success: false, inputPath, outputPath, error: outputValidation.error.message, method: 'builtin' };
+    return {
+      success: false,
+      inputPath,
+      outputPath,
+      error: outputValidation.error.message,
+      method: 'builtin'
+    };
   }
 
   try {
     const inputBuffer = fs.readFileSync(inputPath);
-    const outputBuffer = await heicConvert({
-      buffer: inputBuffer,
-      format: 'JPEG',
-      quality: quality / 100
-    });
-
+    let density;
     try {
       const metadata = await sharp(inputBuffer).metadata();
-      const density = metadata.density || 72;
-      await sharp(outputBuffer)
-        .withMetadata({ density })
-        .jpeg({ quality: 100 })
-        .toFile(outputPath);
+      if (Number.isFinite(metadata.density) && metadata.density > 0) density = metadata.density;
     } catch {
-      fs.writeFileSync(outputPath, outputBuffer);
+      // Metadata support is independent from the Wasm pixel decoder.
     }
+    // Load the WASM decoder only in a thread that actually processes HEIC.
+    const heicDecode = require('heic-decode');
+    const { width, height, data } = await heicDecode({ buffer: inputBuffer });
+    const pixels = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+    // libheif already applies HEIF rotation/mirroring, so copying the source
+    // orientation would transform the pixels again. Preserve the fallback's
+    // density-only metadata behaviour without claiming original EXIF/ICC fidelity.
+    await sharp(pixels, { raw: { width, height, channels: 4 } })
+      .removeAlpha()
+      .withMetadata(density ? { density } : {})
+      .jpeg({ quality })
+      .toFile(outputPath);
 
     const result = validateOutputFile(outputPath, validation.stats);
     if (!result.valid) {
-      return { success: false, inputPath, outputPath, error: result.error.message, method: 'builtin' };
+      return {
+        success: false,
+        inputPath,
+        outputPath,
+        error: result.error.message,
+        method: 'builtin'
+      };
     }
 
     return {
@@ -94,22 +119,43 @@ async function convertHeicWithImageMagick(inputPath, outputPath, options = {}) {
 
   const validation = validateInputFile(inputPath);
   if (!validation.valid) {
-    return { success: false, inputPath, outputPath, error: validation.error.message, method: 'imagemagick' };
+    return {
+      success: false,
+      inputPath,
+      outputPath,
+      error: validation.error.message,
+      method: 'imagemagick'
+    };
   }
 
   const outputValidation = prepareOutputPath(outputPath);
   if (!outputValidation.valid) {
-    return { success: false, inputPath, outputPath, error: outputValidation.error.message, method: 'imagemagick' };
+    return {
+      success: false,
+      inputPath,
+      outputPath,
+      error: outputValidation.error.message,
+      method: 'imagemagick'
+    };
   }
 
   try {
     const { execFileSync } = require('child_process');
-    const cmd = await getImageMagickCommand() || 'magick';
-    execFileSync(cmd, [inputPath, '-quality', String(quality), outputPath], { timeout: 60000 });
+    const cmd = (await getImageMagickCommand()) || 'magick';
+    execFileSync(cmd, [inputPath, '-quality', String(quality), outputPath], {
+      timeout: 60000,
+      windowsHide: true
+    });
 
     const result = validateOutputFile(outputPath, validation.stats);
     if (!result.valid) {
-      return { success: false, inputPath, outputPath, error: result.error.message, method: 'imagemagick' };
+      return {
+        success: false,
+        inputPath,
+        outputPath,
+        error: result.error.message,
+        method: 'imagemagick'
+      };
     }
 
     return {
@@ -138,21 +184,30 @@ async function convertHeicToJpg(inputPath, outputPath, options = {}) {
 
   const validation = validateInputFile(inputPath);
   if (!validation.valid) {
-    return { success: false, inputPath, outputPath, error: validation.error.message, errorType: 'file_not_found' };
+    return {
+      success: false,
+      inputPath,
+      outputPath,
+      error: validation.error.message,
+      errorType: 'file_not_found'
+    };
   }
 
   const outputValidation = prepareOutputPath(outputPath);
   if (!outputValidation.valid) {
-    return { success: false, inputPath, outputPath, error: outputValidation.error.message, errorType: 'conversion_error' };
+    return {
+      success: false,
+      inputPath,
+      outputPath,
+      error: outputValidation.error.message,
+      errorType: 'conversion_error'
+    };
   }
 
   // 1. 优先尝试 Sharp（最快的原生方案）
   if (isHeicSupported()) {
     try {
-      await sharp(inputPath)
-        .withMetadata()
-        .jpeg({ quality })
-        .toFile(outputPath);
+      await sharp(inputPath).withMetadata().jpeg({ quality }).toFile(outputPath);
 
       const result = validateOutputFile(outputPath, validation.stats);
       if (!result.valid) {
@@ -167,7 +222,7 @@ async function convertHeicToJpg(inputPath, outputPath, options = {}) {
         method: 'sharp'
       };
     } catch (error) {
-      // fall through to Wasm
+      // A custom libvips build can still reject this particular HEIC.
     }
   }
 
@@ -175,7 +230,7 @@ async function convertHeicToJpg(inputPath, outputPath, options = {}) {
   const wasmResult = await convertHeicBuiltIn(inputPath, outputPath, options);
   if (wasmResult.success) return wasmResult;
 
-  // 3. 最后降级到 ImageMagick（外部工具，速度最慢）
+  // 3. 最后尝试可选的外部解码器；保留不依赖系统安装的默认路径
   const imAvailable = await isImageMagickAvailable();
   if (imAvailable) {
     const imResult = await convertHeicWithImageMagick(inputPath, outputPath, options);
@@ -207,17 +262,30 @@ async function convertPngToJpg(inputPath, outputPath, options = {}) {
 
   const validation = validateInputFile(inputPath);
   if (!validation.valid) {
-    return { success: false, inputPath, outputPath, error: validation.error.message, errorType: 'file_not_found' };
+    return {
+      success: false,
+      inputPath,
+      outputPath,
+      error: validation.error.message,
+      errorType: 'file_not_found'
+    };
   }
 
   const outputValidation = prepareOutputPath(outputPath);
   if (!outputValidation.valid) {
-    return { success: false, inputPath, outputPath, error: outputValidation.error.message, errorType: 'conversion_error' };
+    return {
+      success: false,
+      inputPath,
+      outputPath,
+      error: outputValidation.error.message,
+      errorType: 'conversion_error'
+    };
   }
 
   try {
     await sharp(inputPath)
       .withMetadata()
+      .flatten({ background: '#ffffff' })
       .jpeg({ quality })
       .toFile(outputPath);
 

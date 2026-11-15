@@ -1,0 +1,48 @@
+name: Test and package desktop apps
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: darwin/arm64
+          - os: macos-15-intel
+            target: darwin/amd64
+          - os: windows-latest
+            target: windows/amd64
+          - os: ubuntu-latest
+            target: linux/amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - run: npm ci
+      - run: npm test -- --runInBand
+      - run: go test ./...
+      - run: npm run build -- -platform ${{ matrix.target }}
+      - run: node scripts/verify-cli.mjs ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-to-jpg-${{ matrix.os }}
+          path: |
+            dist/**/*.dmg
+            dist/**/*.zip
+            dist/**/*-setup-*.exe
+            dist/**/*.deb
+            dist/**/*.tar.gz
+          if-no-files-found: error

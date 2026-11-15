@@ -1,5 +1,4 @@
 const { ImageConverter } = require('./base');
-const path = require('path');
 const { convertHeicToJpgAuto, convertPngToJpgAuto } = require('./heic-logic');
 const { convertDngToJpgAuto } = require('./dng-logic');
 const { convertTiffToJpgAuto } = require('./tiff-logic');

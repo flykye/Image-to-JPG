@@ -31,13 +31,18 @@ function categorizeError(error, defaultType = ErrorTypes.UNKNOWN_ERROR) {
   }
 
   const message = error.message.toLowerCase();
-  
+
   if (message.includes('does not exist') || message.includes('no such file')) {
-    return message.includes('directory') && !message.includes('file or directory') ? 
-      ErrorTypes.DIRECTORY_NOT_FOUND : ErrorTypes.FILE_NOT_FOUND;
+    return message.includes('directory') && !message.includes('file or directory')
+      ? ErrorTypes.DIRECTORY_NOT_FOUND
+      : ErrorTypes.FILE_NOT_FOUND;
   } else if (message.includes('permission') || message.includes('access')) {
     return ErrorTypes.PERMISSION_ERROR;
-  } else if (message.includes('not a heic file') || message.includes('invalid format') || message.includes('unsupported')) {
+  } else if (
+    message.includes('not a heic file') ||
+    message.includes('invalid format') ||
+    message.includes('unsupported')
+  ) {
     return ErrorTypes.INVALID_FORMAT;
   } else if (message.includes('corrupted') || message.includes('invalid image')) {
     return ErrorTypes.CORRUPTED_FILE;
@@ -50,46 +55,8 @@ function categorizeError(error, defaultType = ErrorTypes.UNKNOWN_ERROR) {
   } else if (message.includes('space') || message.includes('disk full')) {
     return ErrorTypes.DISK_SPACE_ERROR;
   }
-  
+
   return defaultType;
-}
-
-/**
- * Safely execute a function with error handling
- * @param {Function} fn - Function to execute
- * @param {Array} args - Arguments to pass to the function
- * @param {Function} onError - Error handler function
- * @param {any} defaultValue - Default value to return on error
- * @returns {any} Function result or default value on error
- */
-function safeExecute(fn, args = [], onError = null, defaultValue = null) {
-  try {
-    return fn(...args);
-  } catch (error) {
-    if (onError && typeof onError === 'function') {
-      onError(error);
-    }
-    return defaultValue;
-  }
-}
-
-/**
- * Safely execute an async function with error handling
- * @param {Function} fn - Async function to execute
- * @param {Array} args - Arguments to pass to the function
- * @param {Function} onError - Error handler function
- * @param {any} defaultValue - Default value to return on error
- * @returns {Promise<any>} Promise resolving to function result or default value on error
- */
-async function safeExecuteAsync(fn, args = [], onError = null, defaultValue = null) {
-  try {
-    return await fn(...args);
-  } catch (error) {
-    if (onError && typeof onError === 'function') {
-      onError(error);
-    }
-    return defaultValue;
-  }
 }
 
 /**
@@ -103,7 +70,7 @@ async function safeExecuteAsync(fn, args = [], onError = null, defaultValue = nu
 function createErrorResult(operation, filename, error, fileType = null) {
   const errorMessage = error instanceof Error ? error.message : error;
   const errorType = error instanceof Error ? categorizeError(error) : ErrorTypes.UNKNOWN_ERROR;
-  
+
   return {
     success: false,
     operation,
@@ -115,52 +82,4 @@ function createErrorResult(operation, filename, error, fileType = null) {
   };
 }
 
-/**
- * Wrap a function with try-catch to ensure graceful failure
- * @param {Function} fn - Function to wrap
- * @returns {Function} Wrapped function that never throws
- */
-function wrapWithTryCatch(fn) {
-  return function(...args) {
-    try {
-      return fn(...args);
-    } catch (error) {
-      console.error(`Error in operation: ${error.message}`);
-      return {
-        success: false,
-        error: error.message,
-        errorType: categorizeError(error)
-      };
-    }
-  };
-}
-
-/**
- * Wrap an async function with try-catch to ensure graceful failure
- * @param {Function} fn - Async function to wrap
- * @returns {Function} Wrapped async function that never throws
- */
-function wrapAsyncWithTryCatch(fn) {
-  return async function(...args) {
-    try {
-      return await fn(...args);
-    } catch (error) {
-      console.error(`Error in async operation: ${error.message}`);
-      return {
-        success: false,
-        error: error.message,
-        errorType: categorizeError(error)
-      };
-    }
-  };
-}
-
-module.exports = {
-  ErrorTypes,
-  categorizeError,
-  safeExecute,
-  safeExecuteAsync,
-  createErrorResult,
-  wrapWithTryCatch,
-  wrapAsyncWithTryCatch
-};
+module.exports = { ErrorTypes, categorizeError, createErrorResult };

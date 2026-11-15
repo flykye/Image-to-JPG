@@ -90,7 +90,9 @@ async function convertDngWithImageMagick(inputPath, outputPath, options = {}) {
   try {
     const { execFileSync } = require('child_process');
     const cmd = await getImageMagickCommand() || 'magick';
-    execFileSync(cmd, [inputPath, '-quality', String(quality), outputPath], { timeout: 120000 });
+    execFileSync(cmd, [inputPath, '-quality', String(quality), outputPath], {
+      timeout: 120000, windowsHide: true
+    });
 
     const result = validateOutputFile(outputPath, validation.stats);
     if (!result.valid) {
@@ -119,8 +121,6 @@ async function convertDngWithImageMagick(inputPath, outputPath, options = {}) {
  * 将 DNG 文件转换为 JPG
  */
 async function convertDngToJpg(inputPath, outputPath, options = {}) {
-  const { quality = 90 } = options;
-
   const validation = validateInputFile(inputPath);
   if (!validation.valid) {
     return { success: false, inputPath, outputPath, error: validation.error.message, errorType: 'file_not_found' };

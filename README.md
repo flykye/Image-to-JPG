@@ -1,244 +1,171 @@
 # Image to JPG
 
-一个基于 Electron 的批量图片处理工具，同时提供 GUI 和 CLI 两种使用方式。当前代码会把 `HEIC`、`LIVP`、`PNG`、`DNG`、`TIFF`、`JPG/JPEG` 统一处理到 JPG 输出目录中。
+基于 [MyGO 0.8.3](https://mygo.egoist.dev/) 的本地批量图片转换工具，支持 macOS（Apple Silicon / Intel）和 Windows x64，同时提供独立的无窗口 CLI。桌面窗口使用系统 WebView，不再依赖 Electron；安装包内置 Node.js 与转换依赖，用户无需另装 Node.js。
 
-[![Electron App](https://img.shields.io/badge/Platform-Electron-blue)](https://www.electronjs.org/)
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+## 功能
 
-## 当前实现支持什么
+- 拖入或多选文件夹，递归处理所有子目录；重复添加和重叠目录自动去重。
+- HEIC、LIVP、PNG、DNG、TIFF、JPG/JPEG 转为 JPG，优先按文件头识别实际格式。
+- 每个源目录分别输出到自身的 `jpg/`；自动跳过 `jpg` 输出目录和目录符号链接。
+- JPG 质量 1–100、原 JPG 重新压缩或原样复制、跳过已有结果、默认4个工作线程，可选10或20线程。
+- 可设置“仅压缩大于指定 MB 的 JPG”，未超过阈值直接复制。
+- 可强制所有结果小于 20 MB；先按设置处理，只有输出仍超限才从原图逐次降低5点质量重试，不缩小像素尺寸。
+- 全局进度、格式数量、逐文件日志、每个目录的结果统计及打开输出目录。
+- 跨文件夹共用真正的工作线程池，按图片尺寸估算内存并限制并发；停止时保留已完成文件并清理本次暂存。
+- 设置持久化，并读取旧版 electron-store 的质量与 JPG 压缩设置。
+- 跟随系统深浅色模式，支持 macOS `Cmd+O` / Windows `Ctrl+O` 选择文件夹。
 
-- GUI：支持拖入或选择多个文件夹，按顺序处理。
-- CLI：支持单目录处理和递归处理。
-- 支持识别的输入类型：`.heic`、`.livp`、`.png`、`.dng`、`.tif`、`.tiff`、`.jpg`、`.jpeg`。
-- 文件识别优先看文件头；扩展名和真实内容不一致时，优先按文件头处理并输出警告。
-- 默认输出到源目录下的 `jpg/` 子目录。
+### 输出安全
 
-## 安装
+原图不修改、不删除。不会清空已有 `jpg/` 目录；重名自动生成 `photo_1.jpg`、`photo_2.jpg` 等文件。每张图先在独立临时目录转换，成功后以禁止覆盖的方式写入输出目录；失败不影响已有结果。启用“跳过已有结果”时，目标必须是普通、非空且带 JPEG 文件头的文件；非法目标报告错误。此检查不比对源图内容或参数。
+
+## 运行环境
+
+**使用安装包：**
+
+- macOS 13.5 或更新版本，分别提供 arm64 与 amd64 安装包。
+- Windows 10/11 x64；需要 Microsoft [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。Windows 11 通常自带，Windows 10 缺少时需安装。
+- ImageMagick 为可选依赖，部分 DNG 或 HEIC 需要它作为兜底。
+
+**开发和构建：**
+
+- Node.js 22.12+ 与 npm（推荐 24.18.0）。
+- Go 1.27.3+（`go.mod` 固定最低版本，Go 可自动下载所需工具链）。
+- Bun，供 MyGO 读取 TypeScript 配置；验证使用 1.4.3。
 
 ```bash
-npm install
-```
-
-如果你要直接运行 GUI：
-
-```bash
+npm ci
 npm start
 ```
 
-如果你要运行 CLI：
+首次启动会从 Node.js 官方站下载目标平台运行时并核对 SHA-256，再安装锁定的转换依赖。缓存保存在 `.mygo/`，生成的运行环境位于 `resources/<os>-<arch>/`；后续启动直接复用缓存并刷新转换源码。需要重新安装运行环境时，删除对应生成目录后再运行 `npm run runtime:prepare`。
+
+只开发界面可运行 `npm run dev:web`。普通浏览器仅能预览布局；文件系统与转换功能需在 MyGO 桌面窗口中使用。
+
+## CLI
+
+供其他程序调用时，使用完整解压后的独立 CLI 包，无需安装 Node.js 或 WebView2：
 
 ```bash
-npm run cli -- <目录路径>
+# macOS
+./batch-image-processor "/photos" -r -o "/exports" --json
 ```
 
-可选地安装成全局命令：
-
-```bash
-npm install -g .
+```powershell
+# Windows PowerShell
+.\batch-image-processor.exe 'D:\照片' -r -o 'D:\导出' --json
 ```
 
-安装后可使用：
+源码开发仍可使用 `npm run cli -- ./photos -r --json`。程序集成应直接启动可执行文件或 `node src/cli/index.js`，使用参数数组并同时排空 stdout/stderr。
+
+- `--json`：stdout 只输出一条版本化最终结果；`--jsonl`：流式事件，最后一条为 result。
+- stderr 专门输出诊断和进度；结果含逐文件实际路径、成功/跳过/失败/待处理状态和扫描错误。
+- 退出码：0 成功或无文件，1 部分/全部转换或扫描失败，2 参数/环境错误，130 取消，143 SIGTERM。
+- `--existing rename|skip|error` 明确已有结果策略，默认 rename；兼容 `--skip-existing`。
+- `-c 10`：最多10个可复用工作线程；默认4，内存保护可能降低实际数量。
+- `--cancel-file <path>` 支持 Mac 和 Windows 的程序化优雅取消。
+- `-o` 配合 `-r` 保留相对目录结构，避免跨目录同名图共用结果；默认仍输出到各目录的 jpg/。
+- `--compress-above-mb 5`：只压缩源大小超过 5 MB 的 JPG；`--force-under-20mb`：所有结果严格小于 20 MB。
+- 保留 `--quality`、`--concurrency`、`--compress-jpg`、`--verbose` 等原参数。
+
+完整协议、重试语义、取消与调用示例见 [CLI 集成文档](docs/cli.md)，验证方法与历史实测见 [验证记录](docs/validation.md)。
+
+## 格式转换链
+
+| 输入 | 处理方式 |
+| --- | --- |
+| HEIC | 支持 HEVC 的 sharp → 内置 heic-decode 解出原始像素 + sharp 一次 JPEG 编码 → 可选 ImageMagick |
+| LIVP | 从 ZIP 中读取首张 HEIC/JPEG；HEIC 继续走上述转换链 |
+| PNG | sharp；透明区域铺白，避免输出黑底 |
+| DNG | sharp → 可选 ImageMagick，实际 RAW 支持取决于解码器与 ImageMagick delegates |
+| TIFF | sharp |
+| JPG/JPEG | 根据设置使用 sharp 压缩或直接复制 |
+
+HEIC 已去掉 JavaScript JPEG 编码和质量 100 的二次编码，真实使用指定质量；内置解码器仍负责 HEVC 解码。基准与边界见 [验证记录](docs/validation.md)。
+
+元数据保留方式延续原转换器实现；不同解码链保留的元数据可能不同。LIVP 输出静态照片，不输出动态视频。
+
+ImageMagick 安装：
 
 ```bash
-batch-image-processor <目录路径>
-```
-
-## GUI 使用方式
-
-GUI 入口是 `npm start`，实际行为如下：
-
-- 可拖拽文件夹，也可通过“添加文件夹”按钮选择文件夹。
-- 可一次排队多个文件夹，按顺序逐个处理。
-- GUI 总是递归扫描子目录。
-- 每个被处理到的目录都会在自身目录下生成一个 `jpg/` 子目录。
-- 递归扫描时会跳过目录名为 `jpg` 的文件夹，避免重复处理输出结果。
-- 提供 JPG 质量滑块和“同时压缩原有 JPG 文件”开关。
-- 质量和 JPG 压缩开关会持久化到本地配置。
-- 处理完成后可直接打开输出目录。
-- 启动时会检查 ImageMagick；未检测到时，界面会给出提示。
-
-注意：GUI 在处理每个目录分组时会先清空该目录下已有的 `jpg/` 输出目录。
-
-## CLI 使用方式
-
-### 基本命令
-
-```bash
-npm run cli -- ./photos
-```
-
-递归处理：
-
-```bash
-npm run cli -- ./photos -r
-```
-
-压缩已有 JPG：
-
-```bash
-npm run cli -- ./photos --compress-jpg --quality 85
-```
-
-跳过已经存在的输出文件：
-
-```bash
-npm run cli -- ./photos --skip-existing
-```
-
-### CLI 参数
-
-| 参数 | 简写 | 说明 |
-| --- | --- | --- |
-| `--verbose` | `-v` | 输出更详细的日志 |
-| `--recursive` | `-r` | 递归处理子目录 |
-| `--skip-existing` | `-s` | 若预期输出文件已存在则跳过 |
-| `--output-dir <path>` | `-o` | 指定输出目录 |
-| `--concurrency <number>` | `-c` | 并发处理数量，默认 `1` |
-| `--quality <number>` | `-q` | JPG 输出质量，默认 `90` |
-| `--compress-jpg` |  | 对原有 JPG/JPEG 重新压缩；不启用时仅复制到输出目录 |
-
-CLI 没有 `--memory-cleanup` 之类的额外参数，以上表格就是当前代码里实际支持的选项。
-
-### CLI 退出行为
-
-- 目标目录不存在：退出码 `1`
-- 没有发现可处理文件：退出码 `0`
-- 存在处理失败文件：退出码 `1`
-- 全部成功：退出码 `0`
-
-## 输出规则
-
-### 默认输出
-
-- 非递归 CLI：输出到 `<输入目录>/jpg`
-- GUI：输出到每个已扫描目录自己的 `jpg/`
-- 递归 CLI：默认也是每个已扫描目录各自生成 `jpg/`
-
-### 自定义输出目录
-
-- CLI 非递归模式下，`--output-dir` 会把结果写到指定目录。
-- CLI 递归模式下，如果传入 `--output-dir`，所有目录分组都会写到同一个指定目录，而不是分别写到各自子目录的 `jpg/`。
-
-### 重名处理
-
-- 当原有 `JPG/JPEG` 在“不压缩、仅复制”模式下写入输出目录时，会自动追加 `_1`、`_2` 之类的后缀来规避重名。
-- 其他转换输出默认使用固定目标文件名，例如 `IMG_0001.heic -> IMG_0001.jpg`。
-
-## 各格式的实际处理逻辑
-
-### HEIC
-
-- 优先尝试 `sharp`
-- 失败后降级到内置 `heic-convert`
-- 再失败且系统可用时，最后尝试 `ImageMagick`
-
-### LIVP
-
-- 把 `.livp` 当作 ZIP 包读取
-- 从归档中寻找第一个 `.heic`、`.jpg`、`.jpeg`
-- 如果内部是 HEIC，继续走 HEIC 转 JPG 流程
-- 如果内部已经是 JPG/JPEG，则按当前 JPG 处理设置保存到输出目录
-
-### PNG
-
-- 使用 `sharp` 直接转 JPG
-
-### DNG
-
-- 先尝试 `sharp`
-- 失败后，如果系统可用，再降级到 `ImageMagick`
-
-### TIFF
-
-- 当前实现仅使用 `sharp`
-
-### JPG/JPEG
-
-- 开启 `--compress-jpg` 或 GUI 中“同时压缩原有 JPG 文件”时：使用 `sharp` 重新编码
-- 未开启时：直接复制到输出目录
-
-## ImageMagick 什么时候需要
-
-不是所有格式都强依赖 ImageMagick。
-
-- HEIC：仅在 `sharp` 和内置解码器都失败时才会作为最终兜底
-- DNG：`sharp` 失败时作为兜底
-- TIFF：当前代码没有 ImageMagick 兜底
-- PNG / JPG：当前代码不依赖 ImageMagick
-
-macOS:
-
-```bash
+# macOS
 brew install imagemagick
-```
 
-Ubuntu / Debian:
+# Windows，也可使用官网下载的安装程序并启用 Add to PATH
+winget install ImageMagick.ImageMagick
 
-```bash
+# Ubuntu / Debian
 sudo apt-get install imagemagick
 ```
+
+Windows 只探测 `magick`，避免误调用系统的磁盘转换程序 `convert.exe`。安装后重新启动应用以刷新 PATH 和探测结果。
+
+## 打包
+
+```bash
+npm run build:all    # 在 Mac 上构建 Apple Silicon、Intel Mac 和 Windows x64（含独立 CLI）
+npm run build:mac    # Apple Silicon、Intel 各自的 .app 与 .dmg
+npm run build:win    # Windows x64，生成可整体解压使用的 portable.zip
+npm run build:linux  # Linux x64，保留此前的 Linux 打包能力
+npm run build:cli:mac # 只生成两种 Mac 架构的独立 CLI ZIP
+npm run build:cli:win # 只生成 Windows x64 的独立 CLI ZIP
+
+# 只构建指定平台
+npm run build -- -platform darwin/arm64
+npm run build -- -platform darwin/arm64,darwin/amd64,windows/amd64
+```
+
+桌面产物位于 `dist/<os>-<arch>/`，独立 CLI 位于 `dist/cli-<os>-<arch>/`，桌面构建也会生成对应 CLI ZIP。Windows 便携包必须整体解压，保留 exe 旁的 `bin/` 和 `engine/`。在 Windows 构建时 MyGO 可自动获取 NSIS 生成安装程序；在 macOS/Linux 交叉生成 Windows 安装程序需另装 NSIS（`makensis`），未安装时仍生成便携 ZIP。macOS 的 DMG 和签名步骤需在 Mac 上完成。
+
+发布签名可通过 `MACOS_SIGNING_IDENTITY` 和 `WINDOWS_CERTIFICATE` 配置。macOS 默认本机 ad-hoc 签名；对外正式发布仍需 Developer ID 和公证配置。CI 工作流覆盖两种 Mac 架构、Windows 及 Linux 的测试和打包，未配置发布或上传外部商店。
+
+## 清理
+
+```bash
+npm run clean -- --dry-run # 预览待清理路径
+npm run clean             # 清理确认属于本项目的历史产物和临时报告
+```
+
+清理旧 `build/`、Electron 安装包/解压目录、旧版本安装包、一次性压测与 UI 测试目录、QA 临时报告和覆盖率输出。保留当前版本的 `dist` 产物、平台运行时、Node 下载缓存、依赖、测试夹具及 `testimage/` 原始样图，不跟随符号链接删除外部目录。
+
+旧安装包的自动清理步骤只在桌面构建全部成功后执行，并仅处理本次目标目录。独立 CLI 构建仍只重建对应平台目录。
+
+## 验证
+
+```bash
+npm test -- --runInBand
+npm run test:coverage -- --runInBand
+go test ./...
+go test -race ./...
+go vet ./...
+npm run build:web
+node scripts/verify-cli.mjs darwin/arm64 # 当前平台的 CLI ZIP 原生验证
+node scripts/verify-compression.mjs # 真实 1600 万像素图片的 20 MB 降质量重试验证
+```
+
+新增回归覆盖真实 PNG/TIFF/JPG/LIVP 转换、同名冲突、旧输出保留、重叠目录去重、停止处理、错误文件、透明 PNG 白底以及设置迁移。CLI 回归使用真实子进程，覆盖协议、参数、扫描权限、部分失败、800 文件慢消费者输出完整性、同名输入、取消和安全退出。CI 会完整解压各平台 CLI ZIP 并执行原生验证。跨平台编译和打包不代替 Windows 真机或不同版本系统的交互验证。
 
 ## 项目结构
 
 ```text
-src/
-├── ui/
-│   ├── main/         # Electron 主进程、IPC、Worker
-│   └── renderer/     # GUI 页面、样式、交互逻辑
-├── core/
-│   ├── batch/        # 扫描目录、分组、并发编排
-│   ├── converters/   # 各格式转换逻辑
-│   └── services/     # 文件管理、进度、错误处理、文件头识别
-└── cli/
-    └── index.js      # CLI 入口
+main.go / desktop.go        MyGO 窗口、目录选择、服务绑定
+engine.go                  Go 与转换子进程的 JSON 流协议
+settings.go                设置保存、旧版配置迁移
+src/ui/renderer/           HTML/CSS/JS 界面及生成的 mygo.ts 绑定
+src/desktop/worker.js       独立转换进程、全局扫描和进度
+src/core/                  格式转换器、扫描与安全输出服务
+src/core/workers/          可复用转换线程池、取消与内存准入
+src/cli/                   公开 CLI 和版本化机器协议
+cmd/batch-image-processor/  无 GUI 的 Go CLI 启动器
+internal/cliapp/            运行时定位、环境隔离和信号转发
+scripts/                   运行时准备和 MyGO 构建
+runtime/                   转换运行时依赖清单和 lockfile
+resources/                 自动生成的平台运行时（不纳入 Git）
+.github/workflows/         各平台测试与打包
 ```
 
-## 开发命令
-
-```bash
-# 启动 GUI
-npm start
-
-# 运行 CLI
-npm run cli -- <目录路径>
-
-# 运行测试
-npm test
-
-# 监听模式
-npm run test:watch
-
-# 覆盖率
-npm run test:coverage
-
-# 构建发布
-npm run build:mac
-npm run build:win
-npm run build:linux
-```
-
-当前 `electron-builder` 配置：
-
-- macOS：`dmg`、`zip`
-- Windows：`portable`（`x64`）
-- Linux：`AppImage`
-
-## 当前实现里的注意事项
-
-- `package.json` 当前版本是 `1.3.0`，但 CLI 里的 `--version` 仍然硬编码为 `1.1.0`。
-- GUI 通过 `electron-store` 保存设置，默认值是 `quality: 90`、`compressJpg: true`。
-- GUI 的拖拽只接受文件夹，不接受单个文件。
-- 递归扫描时会跳过名字正好是 `jpg` 的目录。
-- `README` 以上内容以当前仓库代码为准，不再保留旧版本更新日志中的历史描述。
-
-## 测试
-
-仓库内已有 Jest 测试，覆盖批处理、文件头识别、转换辅助和错误处理等核心模块。
-
-```bash
-npm test
-```
+修改转换核心后，通过 `npm start` 或构建脚本刷新打包源码。正在运行的开发进程不会监视 Node 转换核心变化，修改后需重启开发命令。
 
 ## License
 
-ISC
+ISC。发布包包含 Node.js 及第三方转换依赖对应的许可证。

@@ -24,14 +24,6 @@ class ConverterFactory {
     return this.converters.find(c => c.supports(filePath));
   }
 
-  async convert(filePath, outputDir, options) {
-    const converter = this.getConverter(filePath);
-    if (!converter) {
-      throw new Error(`No converter found for: ${filePath}`);
-    }
-    return await converter.convert(filePath, outputDir, options);
-  }
-
   async convertByType(filePath, type, outputDir, options) {
     const converter = this.getConverterByType(type);
     if (!converter) {

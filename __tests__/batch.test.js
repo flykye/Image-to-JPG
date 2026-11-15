@@ -1,18 +1,4 @@
-const os = require('os');
-const path = require('path');
-const fs = require('fs');
-
-describe('batch/index - getExpectedOutputPath', () => {
-  it('getExpectedOutputPath is an internal function (tested indirectly)', () => {
-    // getExpectedOutputPath is not exported; indirectly tested via integration
-    expect(true).toBe(true);
-  });
-});
-
-describe('batch helpers - getExpectedOutputPath', () => {
-  // Test the function by accessing it through the module's internals
-  // Since it's not exported, we test it indirectly via the module structure
-
+describe('batch exports', () => {
   it('module exports scanDirectory, scanDirectoryRecursive, batchProcessImages', () => {
     const exports = require('../src/core/batch');
     expect(typeof exports.scanDirectory).toBe('function');
@@ -33,16 +19,7 @@ describe('batch scanDirectory', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'batch_test_'));
   });
 
-  afterEach(() => {
-    // Cleanup
-    try {
-      const files = fs.readdirSync(tmpDir);
-      for (const file of files) {
-        fs.unlinkSync(path.join(tmpDir, file));
-      }
-      fs.rmdirSync(tmpDir);
-    } catch {}
-  });
+  afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
   it('returns error for non-existent directory', () => {
     const { scanDirectory } = require('../src/core/batch');
@@ -100,7 +77,7 @@ describe('batch scanDirectory', () => {
     const { scanDirectory } = require('../src/core/batch');
     const result = scanDirectory(tmpDir);
     expect(result.stats.heic).toBe(1);
-    expect(result.files.some(f => f.includes('subdir'))).toBe(false);
+    expect(result.files.some((f) => f.includes('subdir'))).toBe(false);
   });
 });
 
@@ -116,25 +93,7 @@ describe('batch scanDirectoryRecursive', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'batch_recursive_test_'));
   });
 
-  afterEach(() => {
-    try {
-      const cleanDir = (dir) => {
-        const entries = fs.readdirSync(dir);
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry);
-          const stat = fs.statSync(fullPath);
-          if (stat.isDirectory()) {
-            cleanDir(fullPath);
-            fs.rmdirSync(fullPath);
-          } else {
-            fs.unlinkSync(fullPath);
-          }
-        }
-      };
-      cleanDir(tmpDir);
-      fs.rmdirSync(tmpDir);
-    } catch {}
-  });
+  afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
   it('returns error for non-existent directory', () => {
     const { scanDirectoryRecursive } = require('../src/core/batch');
@@ -155,10 +114,10 @@ describe('batch scanDirectoryRecursive', () => {
     expect(result.success).toBe(true);
     expect(result.groups.length).toBe(3); // root, sub1, sub2
 
-    const rootGroup = result.groups.find(g => path.basename(g.dirPath) === path.basename(tmpDir));
+    const rootGroup = result.groups.find((g) => path.basename(g.dirPath) === path.basename(tmpDir));
     expect(rootGroup.files.length).toBe(1);
 
-    const sub1Group = result.groups.find(g => path.basename(g.dirPath) === 'sub1');
+    const sub1Group = result.groups.find((g) => path.basename(g.dirPath) === 'sub1');
     expect(sub1Group.files.length).toBe(2);
 
     expect(result.totalStats.total).toBe(4);
@@ -173,7 +132,7 @@ describe('batch scanDirectoryRecursive', () => {
     const result = scanDirectoryRecursive(tmpDir);
     expect(result.success).toBe(true);
     // jpg/ directory should be skipped
-    const jpgGroup = result.groups.find(g => g.dirPath.includes('jpg'));
+    const jpgGroup = result.groups.find((g) => g.dirPath.includes('jpg'));
     expect(jpgGroup).toBeUndefined();
     // source.heic should still be found
     expect(result.totalStats.total).toBe(1);

@@ -1,17 +1,18 @@
 const childProcess = require('child_process');
 const helpers = require('../src/core/services/conversion-helpers');
-const heicConvert = require('heic-convert');
+const heicDecode = require('heic-decode');
 const sharp = require('sharp');
 
 // Mock child_process
 jest.mock('child_process', () => ({
   execFileSync: jest.fn(),
+  execFile: jest.fn(),
   execSync: jest.fn(),
   exec: jest.fn()
 }));
 
-// Mock heic-convert 强制 Wasm 降级
-jest.mock('heic-convert', () => jest.fn());
+// Mock heic-decode 强制 Wasm 降级
+jest.mock('heic-decode', () => jest.fn());
 
 // Mock sharp
 jest.mock('sharp', () => {
@@ -53,7 +54,7 @@ describe('Security - Shell Command Injection Prevention', () => {
 
   it('should safely delegate HEIC conversion to execFileSync with array parameters', async () => {
     // 模拟 Wasm 失败，促使进入 ImageMagick
-    heicConvert.mockRejectedValue(new Error('Wasm failed intentionally'));
+    heicDecode.mockRejectedValue(new Error('Wasm failed intentionally'));
     
     // 强制 mock ImageMagick 探测
     jest.spyOn(helpers, 'getImageMagickCommand').mockResolvedValue('/usr/local/bin/magick');
@@ -82,7 +83,7 @@ describe('Security - Shell Command Injection Prevention', () => {
         '85',
         outputPath
       ],
-      { timeout: 60000 }
+      { timeout: 60000, windowsHide: true }
     );
   });
 
@@ -116,7 +117,7 @@ describe('Security - Shell Command Injection Prevention', () => {
         '95',
         outputPath
       ],
-      { timeout: 120000 }
+      { timeout: 120000, windowsHide: true }
     );
   });
 });

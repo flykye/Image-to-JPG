@@ -5,10 +5,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * 验证输入文件
@@ -121,18 +121,18 @@ async function getImageMagickCommand() {
     return cachedImageMagickCmd || null;
   }
 
-  const commands = [
-    { name: 'magick', cmd: 'magick -version', timeout: 3000 },
-    { name: 'convert', cmd: 'convert -version', timeout: 3000 },
-    { name: '/opt/homebrew/bin/magick', cmd: '/opt/homebrew/bin/magick -version', timeout: 3000 },
-    { name: '/usr/local/bin/magick', cmd: '/usr/local/bin/magick -version', timeout: 3000 },
-    { name: '/opt/homebrew/bin/convert', cmd: '/opt/homebrew/bin/convert -version', timeout: 3000 },
-    { name: '/usr/local/bin/convert', cmd: '/usr/local/bin/convert -version', timeout: 3000 }
+  // Windows also has a convert.exe (disk formatting), unrelated to ImageMagick.
+  const commands = process.platform === 'win32' ? ['magick'] : [
+    'magick', 'convert', '/opt/homebrew/bin/magick', '/usr/local/bin/magick',
+    '/opt/homebrew/bin/convert', '/usr/local/bin/convert'
   ];
 
-  for (const { name, cmd, timeout } of commands) {
+  for (const name of commands) {
     try {
-      await execAsync(cmd, { timeout });
+      const { stdout } = await execFileAsync(name, ['-version'], {
+        timeout: 3000, windowsHide: true
+      });
+      if (!stdout.includes('ImageMagick')) continue;
       cachedImageMagickCmd = name;
       return cachedImageMagickCmd;
     } catch {

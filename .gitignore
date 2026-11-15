@@ -1,6 +1,13 @@
 node_modules/
 dist/
+build/
+.mygo/
+resources/darwin-*/
+resources/windows-*/
+resources/linux-*/
+coverage/
 testdng
 testimage
 .DS_Store
 .claude/
+.gstack/

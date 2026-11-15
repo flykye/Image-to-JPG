@@ -97,8 +97,10 @@ function detectFileType(filePath) {
     type = extType === 'livp' ? 'livp' : null;
     if (extType === 'livp') effectiveHeaderType = 'livp';
   } else if (headerType === 'tiff') {
-    type = 'tiff';
-    effectiveHeaderType = 'tiff';
+    // DNG is a TIFF container. Its generic header is compatible with .dng,
+    // and must retain the RAW converter's ImageMagick fallback.
+    type = extType === 'dng' ? 'dng' : 'tiff';
+    effectiveHeaderType = type;
   } else if (headerType) {
     type = headerType;
   } else {

@@ -1,78 +1,48 @@
 {
   "name": "image-to-jpg",
-  "version": "1.3.0",
-  "description": "Batch image processor for HEIC, LIVP, PNG, DNG files with Electron GUI",
-  "main": "src/ui/main/index.js",
+  "version": "1.6.1",
+  "description": "Batch image converter with MyGO desktop UI and CLI for macOS and Windows",
   "bin": {
     "batch-image-processor": "./src/cli/index.js"
   },
   "scripts": {
-    "start": "electron .",
+    "start": "node scripts/desktop.mjs dev",
+    "dev:web": "vite --host 127.0.0.1",
+    "build:web": "vite build",
     "cli": "node src/cli/index.js",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux",
+    "runtime:prepare": "node scripts/prepare-runtime.mjs",
+    "build": "node scripts/desktop.mjs build",
+    "build:mac": "node scripts/desktop.mjs build -platform darwin/arm64,darwin/amd64",
+    "build:win": "node scripts/desktop.mjs build -platform windows/amd64",
+    "build:linux": "node scripts/desktop.mjs build -platform linux/amd64",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
-  },
-  "build": {
-    "appId": "com.livp.imageprocessor",
-    "productName": "Image to JPG",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "src/**/*",
-      "node_modules/**/*",
-      "package.json"
-    ],
-    "asarUnpack": [
-      "node_modules/sharp/**/*",
-      "node_modules/@img/**/*"
-    ],
-    "win": {
-      "icon": "src/assets/icon.ico",
-      "target": [
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "mac": {
-      "icon": "src/assets/icon.icns",
-      "category": "public.app-category.utilities",
-      "target": [
-        "dmg",
-        "zip"
-      ]
-    },
-    "linux": {
-      "category": "Utility",
-      "target": [
-        "AppImage"
-      ]
-    }
+    "test:coverage": "jest --coverage",
+    "test:go": "go test ./...",
+    "check": "npm test -- --runInBand && go test ./... && npm run build:web",
+    "build:cli": "node scripts/build-cli.mjs",
+    "build:cli:mac": "node scripts/build-cli.mjs darwin/arm64,darwin/amd64",
+    "build:cli:win": "node scripts/build-cli.mjs windows/amd64",
+    "test:cli": "jest --runInBand __tests__/cli.test.js",
+    "build:all": "node scripts/desktop.mjs build -platform darwin/arm64,darwin/amd64,windows/amd64",
+    "clean": "node scripts/clean.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@img/sharp-win32-x64": "^0.34.5",
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.6.1",
     "commander": "^14.0.0",
-    "dmg-license": "^1.0.11",
-    "electron-store": "^11.0.2",
-    "heic-convert": "^2.1.0",
-    "sharp": "^0.34.5"
+    "heic-decode": "2.1.0",
+    "mygo-runtime": "0.8.3",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
-    "electron": "^39.2.7",
-    "electron-builder": "26.0.12",
-    "jest": "^30.0.4"
+    "jest": "^30.0.4",
+    "mygo-cli": "0.8.3",
+    "vite": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

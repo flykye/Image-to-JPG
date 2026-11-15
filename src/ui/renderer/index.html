@@ -1,181 +1,171 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
-  <title>Image to JPG</title>
-  <link rel="stylesheet" href="styles.css">
-</head>
-
-<body>
-  <div class="container">
-    <!-- ImageMagick Warning -->
-    <div id="imagemagickWarning" class="im-warning hidden">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-        <line x1="12" y1="9" x2="12" y2="13"></line>
-        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-      </svg>
-      <div class="im-warning-text">
-        <span>未检测到 ImageMagick，部分格式(如DNG/TIFF/慢动作等)转换可能失败或受限。</span>
-        <a href="#" id="imDownloadLink" class="im-download-link">点击前往下载 ImageMagick</a>
-      </div>
-    </div>
-
-    <!-- Drop Zone -->
-    <div id="dropZone" class="drop-zone">
-      <div class="drop-content">
-        <div class="drop-icon">
-          <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*"
+    />
+    <title>Image to JPG</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="windowbar" aria-hidden="true"></div>
+    <div class="app-shell">
+      <header class="app-header">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="m4 17 5-5 4 4 3-3 5 5" />
           </svg>
         </div>
-        <h2 class="drop-title">拖入文件夹</h2>
-        <p class="drop-hint">或点击下方按钮选择文件夹</p>
-
-        <button id="addFolderBtn" class="add-folder-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 22h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z" />
-            <line x1="12" y1="10" x2="12" y2="18" />
-            <line x1="8" y1="14" x2="16" y2="14" />
-          </svg>
-          添加文件夹
-        </button>
-
-        <!-- Folder List -->
-        <div id="folderList" class="folder-list"></div>
-
-        <!-- Start Button -->
-        <button id="startProcessingBtn" class="start-processing-btn hidden">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="5 3 19 12 5 21 5 3" />
-          </svg>
-          开始处理 (<span id="folderCount">0</span> 个文件夹)
-        </button>
-
-        <p class="drop-hint small-hint">支持 HEIC、LIVP、PNG、DNG、JPG 格式文件</p>
-
-        <!-- Settings Section -->
-        <div class="settings-panel">
-          <div class="setting-item">
-            <label for="qualityRange">JPG 压缩质量: <span id="qualityValue">95</span></label>
-            <input type="range" id="qualityRange" min="1" max="100" value="95">
-          </div>
-          <div class="setting-item">
-            <label class="checkbox-label">
-              <input type="checkbox" id="compressJpg" checked>
-              <span>同时压缩原有的 JPG 文件</span>
-            </label>
-          </div>
+        <div>
+          <h1>把照片，整理成 JPG。</h1>
+          <p>多种格式，一次转换。原图始终保留在原处。</p>
         </div>
-      </div>
-    </div>
-
-    <!-- Processing Panel -->
-    <div id="processingPanel" class="processing-panel hidden">
-      <!-- Header -->
-      <div class="panel-header">
-        <div class="progress-container">
-          <div class="progress-bar">
-            <div id="progressFill" class="progress-fill"></div>
-          </div>
-          <span id="progressText" class="progress-text">0%</span>
-        </div>
-      </div>
-
-      <!-- Stats -->
-      <div id="statsContainer" class="stats-container">
-        <div class="stat-item">
-          <span class="stat-label">HEIC</span>
-          <span id="heicCount" class="stat-value">0</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">LIVP</span>
-          <span id="livpCount" class="stat-value">0</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">PNG</span>
-          <span id="pngCount" class="stat-value">0</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">DNG</span>
-          <span id="dngCount" class="stat-value">0</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">TIFF</span>
-          <span id="tiffCount" class="stat-value">0</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">JPG</span>
-          <span id="jpgCount" class="stat-value">0</span>
-        </div>
-      </div>
-
-      <!-- Summary (shown after completion) -->
-      <div id="summaryContainer" class="summary-container hidden">
-        <div class="summary-header">
-          <span id="summaryIcon" class="summary-icon"></span>
-          <span id="summaryTitle" class="summary-title"></span>
-        </div>
-        
-        <!-- Folder Stats List -->
-        <div id="folderStatsList" class="folder-stats-list"></div>
-        
-        <!-- Total Stats -->
-        <div class="summary-stats">
-          <div class="summary-stat">
-            <span class="summary-stat-value" id="summaryDuration">0秒</span>
-            <span class="summary-stat-label">耗时</span>
-          </div>
-          <div class="summary-stat">
-            <span class="summary-stat-value" id="summaryTotal">0</span>
-            <span class="summary-stat-label">总数</span>
-          </div>
-          <div class="summary-stat success">
-            <span class="summary-stat-value" id="summarySuccess">0</span>
-            <span class="summary-stat-label">成功</span>
-          </div>
-          <div class="summary-stat error">
-            <span class="summary-stat-value" id="summaryFailed">0</span>
-            <span class="summary-stat-label">失败</span>
-          </div>
-        </div>
-        <div class="summary-buttons">
-          <button id="openFolderBtn" class="new-process-btn secondary-btn">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z" />
-            </svg>
-            打开输出文件夹
-          </button>
-          <button id="newProcessBtn" class="new-process-btn">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            处理新文件夹
+        <div class="header-actions">
+          <button id="newProcessBtn" class="primary-button new-task-button hidden">
+            <span aria-hidden="true">＋</span>新任务
           </button>
         </div>
-      </div>
-
-      <!-- Log Output -->
-      <div id="logContainer" class="log-container">
-        <div id="logOutput" class="log-output"></div>
-      </div>
+      </header>
+      <div id="notice" class="notice hidden" role="alert"></div>
+      <main id="workspace" class="workspace">
+        <section class="queue-panel" aria-labelledby="queueTitle">
+          <div class="section-heading">
+            <div>
+              <h2 id="queueTitle">待处理文件夹 <span id="folderCount" class="count">0</span></h2>
+              <p>自动包含所有子文件夹</p>
+            </div>
+            <button id="clearQueueBtn" class="text-button" disabled>清空</button>
+          </div>
+          <div id="dropZone" class="drop-zone">
+            <svg class="folder-symbol" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <path
+                d="M7 13a4 4 0 0 1 4-4h10l4 5h12a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H11a4 4 0 0 1-4-4V13Z"
+              />
+              <path d="M24 21v12m-6-6 6-6 6 6" />
+            </svg>
+            <h3>将文件夹拖到这里</h3>
+            <p>也可以一次选择多个文件夹</p>
+            <button id="addFolderBtn" class="secondary-button">
+              选择文件夹<span class="shortcut" id="shortcutHint">⌘ O</span>
+            </button>
+            <div class="formats" aria-label="支持的图片格式">
+              HEIC · LIVP · PNG · DNG · TIFF · JPG
+            </div>
+          </div>
+          <div id="folderList" class="folder-list" aria-live="polite"></div>
+          <div id="progressPanel" class="progress-panel hidden" aria-live="polite">
+            <div class="progress-heading">
+              <h3 id="progressTitle">正在扫描文件夹…</h3>
+              <strong id="progressPercent">—</strong>
+            </div>
+            <div
+              id="progressBar"
+              class="progress-track"
+              role="progressbar"
+              aria-label="转换进度"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <div id="progressFill"></div>
+            </div>
+            <p id="progressDescription" class="progress-description">准备转换</p>
+            <div id="typeCounts" class="type-counts"></div>
+            <div id="resultStats" class="result-stats hidden"></div>
+          </div>
+          <div id="folderResults" class="folder-results"></div>
+          <details id="logDetails" class="log-details hidden">
+            <summary>处理记录 <span id="logCount">0</span></summary>
+            <div id="logOutput" class="log-output" role="log" aria-label="处理记录"></div>
+          </details>
+        </section>
+        <aside class="settings-panel" aria-labelledby="settingsTitle">
+          <h2 id="settingsTitle">输出设置</h2>
+          <fieldset id="settingsFields" disabled>
+            <div class="quality-label">
+              <label for="qualityRange">JPG 质量</label
+              ><output id="qualityValue" for="qualityRange">90</output>
+            </div>
+            <input id="qualityRange" type="range" min="1" max="100" value="90" />
+            <div class="range-labels"><span>更小体积</span><span>更多细节</span></div>
+            <label class="check-setting"
+              ><input id="compressJpg" type="checkbox" checked /><span
+                ><strong>压缩已有 JPG</strong><small>关闭时直接复制，保留原始画质</small></span
+              ></label
+            >
+            <div class="threshold-setting">
+              <label for="compressAboveMb">仅压缩大于</label>
+              <div class="threshold-input">
+                <input
+                  id="compressAboveMb"
+                  type="number"
+                  min="0"
+                  max="1000000"
+                  step="any"
+                  value="0"
+                  required
+                  aria-describedby="compressThresholdHint"
+                />
+                <span>MB 的 JPG</span>
+              </div>
+              <small id="compressThresholdHint">0 表示全部 JPG；1 MB = 1,000,000 字节</small>
+            </div>
+            <label class="check-setting"
+              ><input id="forceUnder20Mb" type="checkbox" /><span
+                ><strong>强制小于 20 MB</strong
+                ><small>先按设置处理，结果超限再降低质量。</small></span
+              ></label
+            >
+            <details class="settings-help">
+              <summary>大小限制如何生效</summary>
+              <p>
+                输出达到 20 MB 时，每次降低 5
+                点质量，从原图重试。仅复制的图片先按设定质量压缩；最低质量仍超限则报错。1 MB =
+                1,000,000 字节。
+              </p>
+            </details>
+            <label class="check-setting"
+              ><input id="skipExisting" type="checkbox" /><span
+                ><strong>跳过已有结果</strong><small>输出目录中已有对应文件时跳过</small></span
+              ></label
+            >
+            <div class="concurrency-setting">
+              <label for="concurrency">处理线程</label
+              ><select id="concurrency" aria-describedby="concurrencyHint">
+                <option value="1">1 线程 · 低内存</option>
+                <option value="2">2 线程</option>
+                <option value="3">3 线程</option>
+                <option value="4" selected>4 线程 · 默认</option>
+                <option value="10">10 线程 · 高性能</option>
+                <option value="20">20 线程 · 大内存</option>
+              </select>
+            </div>
+            <p id="concurrencyHint" class="concurrency-hint">
+              大图自动降低并发；更多线程不一定更快。
+            </p>
+          </fieldset>
+          <div class="output-note">
+            <strong>输出到各文件夹的 jpg 目录</strong>
+            <p>保留已有文件，重名自动编号。<br />转换不会修改或删除原图。</p>
+          </div>
+          <div id="dependencyStatus" class="dependency-status" role="status">正在检查转换环境…</div>
+          <button id="imDownloadLink" class="text-button hidden">安装 ImageMagick ↗</button>
+        </aside>
+      </main>
+      <footer class="action-bar">
+        <p id="actionHint" role="status">添加文件夹，开始整理照片</p>
+        <div class="actions">
+          <button id="cancelBtn" class="secondary-button hidden">停止处理</button>
+          <button id="startProcessingBtn" class="primary-button" disabled>
+            开始转换 <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </footer>
     </div>
-  </div>
-
-  <script src="renderer.js"></script>
-</body>
-
+    <script type="module" src="./renderer.js"></script>
+  </body>
 </html>

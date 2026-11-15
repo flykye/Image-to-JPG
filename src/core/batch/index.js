@@ -1,243 +1,184 @@
 const fs = require('fs');
-const fsPromises = require('fs').promises;
 const path = require('path');
 const { factory } = require('../converters');
 const { prepareOutputDirectory } = require('../services/file-manager');
 const { detectFileType } = require('../services/file-signature');
-const { wrapAsyncWithTryCatch, safeExecute, ErrorTypes } = require('../services/error-handler');
+const { JobError, errorDetails } = require('../services/job-error');
+const {
+  MAX_OUTPUT_BYTES,
+  validateCompressionOptions,
+  convertWithPolicy
+} = require('../services/compression-policy');
+const { planOutputNames, existingJpeg, publishOutput } = require('./output-planner');
+const { scanDirectory, scanDirectoryRecursive, scanDirectoryAsync } = require('./scanner');
 
-/**
- * 扫描目录查找支持的文件
- */
-function scanDirectory(dirPath) {
-  if (!fs.existsSync(dirPath)) {
-    return { success: false, error: `Directory '${dirPath}' does not exist`, errorType: ErrorTypes.DIRECTORY_NOT_FOUND };
-  }
-
-  const files = fs.readdirSync(dirPath);
-  const supportedFiles = [];
-  const stats = { total: 0, heic: 0, livp: 0, png: 0, dng: 0, tiff: 0, jpg: 0 };
-
-  for (const file of files) {
-    const fullPath = path.join(dirPath, file);
-    const fstat = safeExecute(fs.statSync, [fullPath], () => null, null);
-
-    if (fstat && fstat.isFile()) {
-      const detection = detectFileType(fullPath);
-      const converter = detection.type ? factory.getConverterByType(detection.type) : null;
-      if (converter) {
-        supportedFiles.push(fullPath);
-        stats[converter.type]++;
-        stats.total++;
-      }
+async function batchProcessImages(files, targetDirectory, progressReporter, options = {}) {
+  const quality = options.quality ?? 90,
+    concurrency = options.concurrency ?? 4;
+  const policy = options.existing || (options.skipExisting ? 'skip' : 'rename');
+  let outputDir;
+  try {
+    validateCompressionOptions(options);
+    if (
+      !Number.isInteger(quality) ||
+      quality < 1 ||
+      quality > 100 ||
+      !Number.isInteger(concurrency) ||
+      concurrency < 1 ||
+      concurrency > 32 ||
+      !['rename', 'skip', 'error'].includes(policy)
+    ) {
+      throw new JobError(
+        'INVALID_ARGUMENT',
+        'Invalid quality, concurrency or existing-output policy'
+      );
     }
+    outputDir = prepareOutputDirectory(options.outputDir, targetDirectory);
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      errorDetails: errorDetails(error, 'WRITE_ERROR', options.outputDir || targetDirectory)
+    };
   }
-
-  return { success: true, files: supportedFiles, stats };
-}
-
-function getExpectedOutputPath(filePath, type, outputDir) {
-  const baseName = path.basename(filePath, path.extname(filePath));
-  const ext = path.extname(filePath).toLowerCase();
-  if (type === 'jpg' && ext !== '.jpg' && ext !== '.jpeg') {
-    return path.join(outputDir, `${baseName}.jpg`);
-  }
-  if (type === 'jpg') {
-    return path.join(outputDir, path.basename(filePath));
-  }
-  return path.join(outputDir, `${baseName}.jpg`);
-}
-
-async function runWithConcurrency(items, concurrency, handler) {
-  const limit = Math.max(1, concurrency || 1);
-  let index = 0;
-  let active = 0;
-
-  return new Promise((resolve) => {
-    function launchWorker() {
-      while (active < limit && index < items.length) {
-        const currentIndex = index++;
-        const currentActive = ++active;
-        handler(items[currentIndex], currentIndex)
-          .then(() => {
-            active--;
-            if (index < items.length) {
-              launchWorker();
-            } else if (active === 0) {
-              resolve();
-            }
-          })
-          .catch(() => {
-            active--;
-            if (index < items.length) {
-              launchWorker();
-            } else if (active === 0) {
-              resolve();
-            }
-          });
-      }
-      if (index >= items.length && active === 0) {
-        resolve();
-      }
-    }
-
-    launchWorker();
-  });
-}
-
-/**
- * 批处理图像
- */
-const batchProcessImages = wrapAsyncWithTryCatch(async function (files, targetDirectory, progressReporter, options = {}) {
-  const { stats: fileStats } = options;
-  const processingStats = {
-    startTime: new Date(),
+  const stats = {
     totalFiles: files.length,
     processedFiles: 0,
     successfulConversions: 0,
+    convertedFiles: 0,
     failedConversions: 0,
-    errors: []
+    skippedFiles: 0,
+    errors: [],
+    files: [],
+    cancelled: false
   };
-
-  const outputDir = prepareOutputDirectory(options.outputDir, targetDirectory, options.clearExisting !== false);
-  const finalOptions = { ...options, outputDir };
-
-  progressReporter.logStart(targetDirectory, fileStats || { totalFiles: files.length });
-
-  let startedCount = 0;
-
-  await runWithConcurrency(files, options.concurrency, async (filePath) => {
-    const filename = path.basename(filePath);
-    const detection = detectFileType(filePath);
-    const converter = detection.type ? factory.getConverterByType(detection.type) : null;
-
-    if (detection.warning) {
-      progressReporter.logWarning(`${filename}: ${detection.warning}`);
-    }
-
-    if (!converter) {
-      processingStats.failedConversions++;
-      processingStats.errors.push({ filename, error: 'No converter found for detected file type' });
-      progressReporter.logError(filename, 'No converter found for detected file type', detection.type || 'unknown');
-      processingStats.processedFiles++;
-      return;
-    }
-
-    const currentIndex = ++startedCount;
-    progressReporter.logFileProcessing(filename, converter.type, currentIndex, files.length);
-
-    try {
-      if (options.skipExisting) {
-        const expectedOutputPath = getExpectedOutputPath(filePath, converter.type, outputDir);
-        try {
-          await fsPromises.access(expectedOutputPath, fs.constants.F_OK);
-          // File exists, skip conversion
-          processingStats.successfulConversions++;
-          progressReporter.logSuccess(filename, expectedOutputPath, converter.type, {
-            converted: false,
-            originalFormat: converter.type,
-            skipped: true
-          });
+  const started = Date.now(),
+    records = new Array(files.length);
+  const detections = new Map(files.map((file) => [file, detectFileType(file)]));
+  const types = new Map(
+    files.map((file) => [
+      file,
+      factory.getConverterByType(detections.get(file).type)?.type || 'unknown'
+    ])
+  );
+  const plan = planOutputNames(files, types, options.reservedOutputNames);
+  let next = 0;
+  progressReporter.logStart(targetDirectory, options.stats || { total: files.length });
+  async function work() {
+    while (next < files.length) {
+      if (options.shouldCancel?.()) {
+        stats.cancelled = true;
+        return;
+      }
+      const index = next++,
+        input = files[index],
+        filename = path.basename(input);
+      const type = types.get(input),
+        detection = detections.get(input);
+      const expected = path.join(outputDir, plan.names.get(input));
+      let staging, record;
+      try {
+        if (detection.error)
+          throw new JobError('READ_ERROR', detection.error.message, input, detection.error.code);
+        if (detection.warning)
+          progressReporter.logWarning(`${filename}: ${detection.warning}`, input);
+        if (type === 'unknown')
+          throw new JobError('UNSUPPORTED_FORMAT', 'No converter for detected file type', input);
+        const onStart = () =>
+          progressReporter.logFileProcessing(filename, type, index + 1, files.length, input);
+        const onRetry = (event) => progressReporter.logCompressionRetry?.(event);
+        const maxBytes = options.forceUnder20Mb ? MAX_OUTPUT_BYTES : null;
+        if (policy === 'skip' && existingJpeg(expected, maxBytes)) {
+          onStart();
+          record = { input, output: expected, type, status: 'skipped', error: null };
+          record.details = {
+            inputSize: fs.statSync(input).size,
+            outputSize: fs.statSync(expected).size,
+            quality: null,
+            attempts: 0
+          };
+        } else {
+          if (policy === 'error' && fs.existsSync(expected))
+            throw new JobError('OUTPUT_EXISTS', 'Output already exists', expected);
+          staging = fs.mkdtempSync(path.join(outputDir, '.image-to-jpg-'));
+          let result;
+          if (options.conversionPool) {
+            result = await options.conversionPool.run(
+              { input, type, outputDir: staging, options: { ...options, quality } },
+              { onStart, onRetry }
+            );
+          } else {
+            onStart();
+            result = await convertWithPolicy(
+              input,
+              type,
+              staging,
+              { ...options, quality },
+              onRetry
+            );
+          }
+          const published = publishOutput(
+            result.outputPath,
+            expected,
+            policy,
+            plan.claimed,
+            maxBytes
+          );
+          record = {
+            input,
+            output: published.output,
+            type,
+            status: published.skipped ? 'skipped' : 'converted',
+            error: null
+          };
+          record.details = published.skipped
+            ? { ...result.details, outputSize: fs.statSync(published.output).size, quality: null }
+            : result.details;
+        }
+        stats.successfulConversions++;
+        if (record.status === 'skipped') stats.skippedFiles++;
+        else stats.convertedFiles++;
+      } catch (error) {
+        if (error.code === 'CANCELLED') {
+          stats.cancelled = true;
           return;
-        } catch {
-          // File does not exist, proceed with conversion
+        }
+        const details = errorDetails(error, 'WRITE_ERROR', input);
+        record = { input, output: null, type, status: 'failed', error: details };
+        stats.failedConversions++;
+        stats.errors.push({ filename, error: details.message, code: details.code });
+      } finally {
+        if (staging) {
+          try {
+            fs.rmSync(staging, { recursive: true, force: true });
+          } catch (error) {
+            progressReporter.logWarning(`Temporary cleanup failed: ${error.message}`, staging);
+          }
+        }
+        if (record) {
+          records[index] = record;
+          stats.processedFiles++;
         }
       }
-
-      const result = await factory.convertByType(filePath, converter.type, outputDir, {
-        ...finalOptions,
-        forceType: converter.type
-      });
-      if (result.success) {
-        if (!result.outputPath) {
-          throw new Error('Conversion succeeded but output path is missing');
-        }
-        processingStats.successfulConversions++;
-        progressReporter.logSuccess(filename, result.outputPath, converter.type, result.details || {});
-      } else {
-        processingStats.failedConversions++;
-        processingStats.errors.push({ filename, error: result.error || 'Unknown conversion error' });
-        progressReporter.logError(filename, result.error || 'Unknown conversion error', converter.type);
-      }
-    } catch (error) {
-      processingStats.failedConversions++;
-      processingStats.errors.push({ filename, error: error.message });
-      progressReporter.logError(filename, error.message, converter.type);
-    } finally {
-      processingStats.processedFiles++;
+      if (record.status === 'failed')
+        progressReporter.logError(filename, record.error.message, type, 'processing', record);
+      else
+        progressReporter.logSuccess(
+          filename,
+          record.output,
+          type,
+          { ...record.details, skipped: record.status === 'skipped' },
+          record
+        );
+      await new Promise((resolve) => setImmediate(resolve));
     }
-  });
-
-  processingStats.endTime = new Date();
-  processingStats.duration = (processingStats.endTime - processingStats.startTime) / 1000;
-
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, files.length) }, work));
+  stats.files = records.filter(Boolean);
+  stats.cancelled = stats.cancelled || !!options.shouldCancel?.();
+  stats.duration = (Date.now() - started) / 1000;
   progressReporter.logSummary();
-
-  return { success: true, stats: processingStats };
-});
-
-/**
- * 递归扫描目录及所有子文件夹，按目录分组返回支持的文件
- */
-function scanDirectoryRecursive(dirPath) {
-  if (!fs.existsSync(dirPath)) {
-    return { success: false, error: `Directory '${dirPath}' does not exist`, errorType: ErrorTypes.DIRECTORY_NOT_FOUND };
-  }
-
-  const groups = [];
-  const totalStats = { total: 0, heic: 0, livp: 0, png: 0, dng: 0, tiff: 0, jpg: 0 };
-
-  function walkDir(currentDir) {
-    let entries;
-    try {
-      entries = fs.readdirSync(currentDir);
-    } catch (e) {
-      return;
-    }
-
-    const supportedFiles = [];
-    const stats = { total: 0, heic: 0, livp: 0, png: 0, dng: 0, tiff: 0, jpg: 0 };
-    const subdirs = [];
-
-    for (const entry of entries) {
-      if (entry === 'jpg') continue;
-
-      const fullPath = path.join(currentDir, entry);
-      const fstat = safeExecute(fs.statSync, [fullPath], () => null, null);
-      if (!fstat) continue;
-
-      if (fstat.isDirectory()) {
-        subdirs.push(fullPath);
-      } else if (fstat.isFile()) {
-        const detection = detectFileType(fullPath);
-        const converter = detection.type ? factory.getConverterByType(detection.type) : null;
-        if (converter) {
-          supportedFiles.push(fullPath);
-          stats[converter.type]++;
-          stats.total++;
-        }
-      }
-    }
-
-    if (supportedFiles.length > 0) {
-      groups.push({ dirPath: currentDir, files: supportedFiles, stats });
-      for (const key of Object.keys(totalStats)) {
-        totalStats[key] += stats[key];
-      }
-    }
-
-    for (const subdir of subdirs) {
-      walkDir(subdir);
-    }
-  }
-
-  walkDir(dirPath);
-
-  return { success: true, groups, totalStats };
+  return { success: stats.failedConversions === 0 && !stats.cancelled, stats, outputDir };
 }
 
-module.exports = {
-  scanDirectory,
-  scanDirectoryRecursive,
-  batchProcessImages
-};
+module.exports = { scanDirectory, scanDirectoryRecursive, scanDirectoryAsync, batchProcessImages };

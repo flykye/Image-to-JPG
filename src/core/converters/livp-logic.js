@@ -68,7 +68,7 @@ async function extractImageFromLivp(livpFilePath, outputDir, options = {}) {
   }
 
   const originalExt = path.extname(imageEntry.entryName).toLowerCase();
-  const baseName = path.basename(livpFilePath, '.livp');
+  const baseName = path.basename(livpFilePath, path.extname(livpFilePath));
 
   if (originalExt === '.heic') {
     const tempHeicPath = path.join(outputDir, `temp_${baseName}.heic`);

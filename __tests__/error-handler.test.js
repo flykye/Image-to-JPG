@@ -1,11 +1,7 @@
 const {
   ErrorTypes,
   categorizeError,
-  safeExecute,
-  safeExecuteAsync,
-  createErrorResult,
-  wrapWithTryCatch,
-  wrapAsyncWithTryCatch
+  createErrorResult
 } = require('../src/core/services/error-handler');
 
 describe('error-handler', () => {
@@ -21,7 +17,9 @@ describe('error-handler', () => {
     });
 
     it('returns DIRECTORY_NOT_FOUND when "directory" is in message', () => {
-      expect(categorizeError(new Error('Directory does not exist'))).toBe(ErrorTypes.DIRECTORY_NOT_FOUND);
+      expect(categorizeError(new Error('Directory does not exist'))).toBe(
+        ErrorTypes.DIRECTORY_NOT_FOUND
+      );
     });
 
     it('returns PERMISSION_ERROR for permission/access errors', () => {
@@ -53,42 +51,14 @@ describe('error-handler', () => {
     });
 
     it('returns DISK_SPACE_ERROR for disk space errors', () => {
-      expect(categorizeError(new Error('No space left on device'))).toBe(ErrorTypes.DISK_SPACE_ERROR);
+      expect(categorizeError(new Error('No space left on device'))).toBe(
+        ErrorTypes.DISK_SPACE_ERROR
+      );
       expect(categorizeError(new Error('Disk full'))).toBe(ErrorTypes.DISK_SPACE_ERROR);
     });
 
     it('returns UNKNOWN_ERROR for unrecognized messages', () => {
       expect(categorizeError(new Error('Something went wrong'))).toBe(ErrorTypes.UNKNOWN_ERROR);
-    });
-  });
-
-  describe('safeExecute', () => {
-    it('returns function result on success', () => {
-      const result = safeExecute(() => 42, [], null, null);
-      expect(result).toBe(42);
-    });
-
-    it('returns defaultValue on error', () => {
-      const result = safeExecute(() => { throw new Error('fail'); }, [], null, -1);
-      expect(result).toBe(-1);
-    });
-
-    it('calls onError handler when provided', () => {
-      const handler = jest.fn();
-      safeExecute(() => { throw new Error('fail'); }, [], handler, null);
-      expect(handler).toHaveBeenCalledWith(expect.any(Error));
-    });
-  });
-
-  describe('safeExecuteAsync', () => {
-    it('returns function result on success', async () => {
-      const result = await safeExecuteAsync(() => Promise.resolve(42), [], null, null);
-      expect(result).toBe(42);
-    });
-
-    it('returns defaultValue on error', async () => {
-      const result = await safeExecuteAsync(() => Promise.reject(new Error('fail')), [], null, -1);
-      expect(result).toBe(-1);
     });
   });
 
@@ -102,36 +72,6 @@ describe('error-handler', () => {
       expect(result.fileType).toBe('heic');
       expect(result.errorType).toBeDefined();
       expect(result.timestamp).toBeInstanceOf(Date);
-    });
-  });
-
-  describe('wrapWithTryCatch', () => {
-    it('returns result on success', () => {
-      const wrapped = wrapWithTryCatch((a, b) => a + b);
-      const result = wrapped(2, 3);
-      expect(result).toBe(5);
-    });
-
-    it('returns error object on failure', () => {
-      const wrapped = wrapWithTryCatch(() => { throw new Error('wrapped error'); });
-      const result = wrapped();
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('wrapped error');
-    });
-  });
-
-  describe('wrapAsyncWithTryCatch', () => {
-    it('returns result on success', async () => {
-      const wrapped = wrapAsyncWithTryCatch(async (a, b) => a + b);
-      const result = await wrapped(2, 3);
-      expect(result).toBe(5);
-    });
-
-    it('returns error object on failure', async () => {
-      const wrapped = wrapAsyncWithTryCatch(async () => { throw new Error('async error'); });
-      const result = await wrapped();
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('async error');
     });
   });
 });
